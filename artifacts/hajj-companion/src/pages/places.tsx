@@ -20,8 +20,7 @@ export default function PlacesPage() {
   }, []);
 
   const { data: places, isLoading } = useGetPlaces(
-    coords ? { lat: coords.lat, lng: coords.lng } : undefined,
-    { query: { enabled: true } }
+    coords ? { lat: coords.lat, lng: coords.lng } : undefined
   );
 
   const startNav = useStartNavigation();

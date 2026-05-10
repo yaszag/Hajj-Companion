@@ -13,6 +13,7 @@ export function haversineDistance(
   return EARTH_RADIUS_M * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// atan2(y, x) — correct formula per spec (Bug 2 fix)
 export function calculateBearing(
   lat1: number, lng1: number,
   lat2: number, lng2: number
@@ -39,7 +40,17 @@ export function bearingToArabic(bearing: number): string {
   return "اتجه شمال غرباً ↖";
 }
 
+// Hajj-adjusted walking speed: 0.8 m/s (crowds + elderly)
+// Returns ETA range string e.g. "10 - 15 دقيقة"
 export function etaMinutes(distanceM: number): number {
-  const walkingSpeedMs = 1.1;
+  const walkingSpeedMs = 0.8;
   return Math.ceil(distanceM / walkingSpeedMs / 60);
+}
+
+export function etaRange(distanceM: number): string {
+  const low = Math.floor(distanceM / 0.9 / 60);
+  const high = Math.ceil(distanceM / 0.6 / 60);
+  if (low === 0 && high <= 1) return "أقل من دقيقة";
+  if (low === high) return `~${low} دقيقة`;
+  return `${low} - ${high} دقيقة`;
 }

@@ -1,13 +1,21 @@
 import { Router } from "express";
 import { eq, and } from "drizzle-orm";
-import { db, manasikProgressTable } from "@workspace/db";
-import { MANASIK_LIST } from "@workspace/db";
+import { db, manasikProgressTable, manasikProgressHistoryTable, usersTable, MANASIK_LIST } from "@workspace/db";
+import type { NusukType } from "@workspace/db";
 import { UpdateManasikProgressParams, UpdateManasikProgressBody } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
 
 const router = Router();
 
 router.get("/manasik", requireAuth, async (req, res): Promise<void> => {
+  const [userRow] = await db
+    .select({ nusukType: usersTable.nusukType })
+    .from(usersTable)
+    .where(eq(usersTable.id, req.userId!))
+    .limit(1);
+
+  const nusukType = (userRow?.nusukType ?? null) as NusukType | null;
+
   const progress = await db
     .select()
     .from(manasikProgressTable)
@@ -15,10 +23,25 @@ router.get("/manasik", requireAuth, async (req, res): Promise<void> => {
 
   const progressMap = new Map(progress.map((p) => [p.mansakKey, p]));
 
-  const items = MANASIK_LIST.map((item) => {
+  const applicableItems = nusukType
+    ? MANASIK_LIST.filter((item) => item.nusukTypes.includes(nusukType))
+    : MANASIK_LIST;
+
+  const items = applicableItems.map((item) => {
     const p = progressMap.get(item.key);
     return {
-      ...item,
+      key: item.key,
+      titleAr: item.titleAr,
+      titleEn: item.titleEn,
+      order: item.order,
+      day: item.day,
+      descriptionAr: item.descriptionAr,
+      category: item.category,
+      nusukTypes: item.nusukTypes,
+      steps: item.steps,
+      commonMistakes: item.commonMistakes,
+      malikirNote: item.malikirNote,
+      practicalTip: item.practicalTip,
       status: p?.status ?? "pending",
       startedAt: p?.startedAt?.toISOString() ?? null,
       completedAt: p?.completedAt?.toISOString() ?? null,
@@ -51,11 +74,21 @@ router.patch("/manasik/:key/progress", requireAuth, async (req, res): Promise<vo
   }
 
   const now = new Date();
-  const updateData: Record<string, unknown> = { status };
-  if (status === "in_progress") updateData.startedAt = now;
-  if (status === "completed") {
+  const updateData: {
+    status: string;
+    startedAt?: Date | null;
+    completedAt?: Date | null;
+  } = { status };
+
+  if (status === "in_progress") {
+    updateData.startedAt = now;
+    updateData.completedAt = null;
+  } else if (status === "completed") {
     updateData.completedAt = now;
     updateData.startedAt = now;
+  } else if (status === "pending") {
+    updateData.startedAt = null;
+    updateData.completedAt = null;
   }
 
   const [existing] = await db
@@ -63,6 +96,8 @@ router.patch("/manasik/:key/progress", requireAuth, async (req, res): Promise<vo
     .from(manasikProgressTable)
     .where(and(eq(manasikProgressTable.userId, req.userId!), eq(manasikProgressTable.mansakKey, key)))
     .limit(1);
+
+  const fromStatus = existing?.status ?? "pending";
 
   let progress;
   if (existing) {
@@ -78,14 +113,31 @@ router.patch("/manasik/:key/progress", requireAuth, async (req, res): Promise<vo
         userId: req.userId!,
         mansakKey: key,
         status,
-        startedAt: updateData.startedAt as Date | undefined,
-        completedAt: updateData.completedAt as Date | undefined,
+        startedAt: updateData.startedAt ?? undefined,
+        completedAt: updateData.completedAt ?? undefined,
       })
       .returning();
   }
 
+  // Log every status change for revert analytics
+  if (fromStatus !== status) {
+    await db.insert(manasikProgressHistoryTable).values({
+      userId: req.userId!,
+      mansakKey: key,
+      fromStatus,
+      toStatus: status,
+    });
+  }
+
   res.json({
-    ...manasikDef,
+    key: manasikDef.key,
+    titleAr: manasikDef.titleAr,
+    titleEn: manasikDef.titleEn,
+    order: manasikDef.order,
+    day: manasikDef.day,
+    descriptionAr: manasikDef.descriptionAr,
+    category: manasikDef.category,
+    malikirNote: manasikDef.malikirNote,
     status: progress.status,
     startedAt: progress.startedAt?.toISOString() ?? null,
     completedAt: progress.completedAt?.toISOString() ?? null,

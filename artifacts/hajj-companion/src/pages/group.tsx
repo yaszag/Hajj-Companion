@@ -17,13 +17,8 @@ export default function GroupPage() {
   const [groupName, setGroupName] = useState("");
   const [isCreateMode, setIsCreateMode] = useState(false);
   
-  const { data: group, isLoading: isGroupLoading, refetch: refetchGroup } = useGetGroup(user?.groupId || "", {
-    query: { enabled: !!user?.groupId }
-  });
-  
-  const { data: members, isLoading: isMembersLoading } = useGetGroupMembers(user?.groupId || "", {
-    query: { enabled: !!user?.groupId }
-  });
+  const { data: group, isLoading: isGroupLoading, refetch: refetchGroup } = useGetGroup(user?.groupId || "");
+  const { data: members, isLoading: isMembersLoading } = useGetGroupMembers(user?.groupId || "");
 
   const joinGroup = useJoinGroup();
   const createGroup = useCreateGroup();

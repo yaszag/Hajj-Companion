@@ -389,6 +389,94 @@ export interface DashboardSummary {
   activeEmergency?: DashboardSummaryActiveEmergency;
 }
 
+export interface DuaCategory {
+  id: string;
+  nameAr: string;
+  /** @nullable */
+  nameEn?: string | null;
+  emoji: string;
+  color: string;
+  /** @nullable */
+  descriptionAr?: string | null;
+  orderIndex: number;
+  duasCount: number;
+}
+
+export interface DuaListItem {
+  id: string;
+  titleAr: string;
+  /** @nullable */
+  titleEn?: string | null;
+  arabicText: string;
+  /** @nullable */
+  source?: string | null;
+  duaType?: string;
+  /** @nullable */
+  categoryId?: string | null;
+  isFeatured: boolean;
+  isFavorited: boolean;
+  createdAt: string;
+}
+
+/**
+ * @nullable
+ */
+export type DuaDetailCategory = {
+  id?: string;
+  nameAr?: string;
+  emoji?: string;
+  color?: string;
+} | null;
+
+export interface DuaDetail {
+  id: string;
+  titleAr: string;
+  /** @nullable */
+  titleEn?: string | null;
+  arabicText: string;
+  /** @nullable */
+  transliteration?: string | null;
+  /** @nullable */
+  translationAr?: string | null;
+  /** @nullable */
+  translationEn?: string | null;
+  /** @nullable */
+  translationFr?: string | null;
+  /** @nullable */
+  source?: string | null;
+  duaType?: string;
+  /** @nullable */
+  categoryId?: string | null;
+  /** @nullable */
+  mansakKey?: string | null;
+  isFeatured: boolean;
+  isFavorited: boolean;
+  createdAt: string;
+  /** @nullable */
+  category?: DuaDetailCategory;
+}
+
+export interface DuaPage {
+  content: DuaListItem[];
+  total: number;
+  page: number;
+  size: number;
+  totalPages: number;
+}
+
+export type NusukTypeInputNusukType =
+  (typeof NusukTypeInputNusukType)[keyof typeof NusukTypeInputNusukType];
+
+export const NusukTypeInputNusukType = {
+  ifrad: "ifrad",
+  tamattu: "tamattu",
+  qiran: "qiran",
+} as const;
+
+export interface NusukTypeInput {
+  nusukType: NusukTypeInputNusukType;
+}
+
 export type GetPlacesParams = {
   lat?: number;
   lng?: number;
@@ -397,4 +485,12 @@ export type GetPlacesParams = {
 export type GetDashboardParams = {
   lat?: number;
   lng?: number;
+};
+
+export type GetDuasParams = {
+  category_id?: string;
+  type?: string;
+  search?: string;
+  page?: number;
+  size?: number;
 };

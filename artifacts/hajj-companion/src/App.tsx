@@ -14,11 +14,15 @@ import NavigatePage from "@/pages/navigate";
 import GroupPage from "@/pages/group";
 import EmergencyPage from "@/pages/emergency";
 import ProfilePage from "@/pages/profile";
+import DuasPage from "@/pages/duas";
+import DuasCategoryPage from "@/pages/duas-category";
+import DuasDetailPage from "@/pages/duas-detail";
+import NusukSelectPage from "@/pages/nusuk-select";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
 
-function Router() {
+function AppRouter() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
@@ -30,6 +34,10 @@ function Router() {
       <Route path="/group" component={GroupPage} />
       <Route path="/emergency" component={EmergencyPage} />
       <Route path="/profile" component={ProfilePage} />
+      <Route path="/duas" component={DuasPage} />
+      <Route path="/duas/cat/:categoryId" component={DuasCategoryPage} />
+      <Route path="/duas/view/:id" component={DuasDetailPage} />
+      <Route path="/nusuk-select" component={NusukSelectPage} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -41,7 +49,7 @@ function App() {
       <TooltipProvider>
         <AuthProvider>
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Router />
+            <AppRouter />
           </WouterRouter>
           <Toaster />
         </AuthProvider>

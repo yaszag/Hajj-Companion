@@ -659,6 +659,183 @@ paths:
               schema:
                 $ref: "#/components/schemas/DashboardSummary"
 
+  # DUAS
+  /duas/categories:
+    get:
+      operationId: getDuaCategories
+      tags: [duas]
+      summary: List all dua categories
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DuaCategory"
+
+  /duas/favorites:
+    get:
+      operationId: getDuaFavorites
+      tags: [duas]
+      summary: Get user's favorite duas
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Favorite duas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DuaListItem"
+
+  /duas/by-mansak/{mansakKey}:
+    get:
+      operationId: getDuasByMansak
+      tags: [duas]
+      summary: Get recommended duas for a specific manasik ritual
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: mansakKey
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Ritual duas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DuaListItem"
+
+  /duas:
+    get:
+      operationId: getDuas
+      tags: [duas]
+      summary: List duas with optional filters
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: category_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Paginated duas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DuaPage"
+
+  /duas/{id}:
+    get:
+      operationId: getDua
+      tags: [duas]
+      summary: Get full dua detail
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Full dua detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DuaDetail"
+        "404":
+          description: Not found
+
+  /duas/{id}/favorite:
+    post:
+      operationId: addDuaFavorite
+      tags: [duas]
+      summary: Add dua to favorites
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "201":
+          description: Added to favorites
+    delete:
+      operationId: removeDuaFavorite
+      tags: [duas]
+      summary: Remove dua from favorites
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Removed
+
+  # NUSUK TYPE
+  /auth/nusuk-type:
+    patch:
+      operationId: updateNusukType
+      tags: [auth]
+      summary: Set the user's Hajj type (ifrad / tamattu / qiran)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NusukTypeInput"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1244,3 +1421,129 @@ components:
           type: integer
         percentComplete:
           type: number
+
+    # DUAS
+    DuaCategory:
+      type: object
+      required: [id, nameAr, emoji, color, orderIndex, duasCount]
+      properties:
+        id:
+          type: string
+          format: uuid
+        nameAr:
+          type: string
+        nameEn:
+          type: ["string", "null"]
+        emoji:
+          type: string
+        color:
+          type: string
+        descriptionAr:
+          type: ["string", "null"]
+        orderIndex:
+          type: integer
+        duasCount:
+          type: integer
+
+    DuaListItem:
+      type: object
+      required: [id, titleAr, arabicText, isFeatured, isFavorited, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        titleAr:
+          type: string
+        titleEn:
+          type: ["string", "null"]
+        arabicText:
+          type: string
+        source:
+          type: ["string", "null"]
+        duaType:
+          type: string
+        categoryId:
+          type: ["string", "null"]
+          format: uuid
+        isFeatured:
+          type: boolean
+        isFavorited:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    DuaDetail:
+      type: object
+      required: [id, titleAr, arabicText, isFeatured, isFavorited, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        titleAr:
+          type: string
+        titleEn:
+          type: ["string", "null"]
+        arabicText:
+          type: string
+        transliteration:
+          type: ["string", "null"]
+        translationAr:
+          type: ["string", "null"]
+        translationEn:
+          type: ["string", "null"]
+        translationFr:
+          type: ["string", "null"]
+        source:
+          type: ["string", "null"]
+        duaType:
+          type: string
+        categoryId:
+          type: ["string", "null"]
+          format: uuid
+        mansakKey:
+          type: ["string", "null"]
+        isFeatured:
+          type: boolean
+        isFavorited:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        category:
+          type: ["object", "null"]
+          properties:
+            id:
+              type: string
+            nameAr:
+              type: string
+            emoji:
+              type: string
+            color:
+              type: string
+
+    DuaPage:
+      type: object
+      required: [content, total, page, size, totalPages]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/DuaListItem"
+        total:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+        totalPages:
+          type: integer
+
+    # NUSUK TYPE
+    NusukTypeInput:
+      type: object
+      required: [nusukType]
+      properties:
+        nusukType:
+          type: string
+          enum: [ifrad, tamattu, qiran]

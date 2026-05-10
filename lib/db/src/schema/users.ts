@@ -20,6 +20,7 @@ export const usersTable = pgTable("users", {
   tentZone: varchar("tent_zone", { length: 15 }),
   groupId: uuid("group_id").references(() => groupsTable.id, { onDelete: "set null" }),
   emergencyContact: varchar("emergency_contact", { length: 20 }),
+  nusukType: varchar("nusuk_type", { length: 10 }),
   qrData: jsonb("qr_data"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

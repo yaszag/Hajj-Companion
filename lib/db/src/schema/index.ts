@@ -5,3 +5,4 @@ export * from "./navigation";
 export * from "./locations";
 export * from "./manasik";
 export * from "./emergency";
+export * from "./duas";

@@ -19,9 +19,14 @@ import type {
 import type {
   AuthResponse,
   DashboardSummary,
+  DuaCategory,
+  DuaDetail,
+  DuaListItem,
+  DuaPage,
   EmergencyAlert,
   ErrorResponse,
   GetDashboardParams,
+  GetDuasParams,
   GetPlacesParams,
   Group,
   GroupInput,
@@ -39,6 +44,7 @@ import type {
   NavigationSession,
   NavigationStart,
   NavigationUpdate,
+  NusukTypeInput,
   Place,
   PlaceDetail,
   PlaceInput,
@@ -2339,3 +2345,656 @@ export function useGetDashboard<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary List all dua categories
+ */
+export const getGetDuaCategoriesUrl = () => {
+  return `/api/duas/categories`;
+};
+
+export const getDuaCategories = async (
+  options?: RequestInit,
+): Promise<DuaCategory[]> => {
+  return customFetch<DuaCategory[]>(getGetDuaCategoriesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDuaCategoriesQueryKey = () => {
+  return [`/api/duas/categories`] as const;
+};
+
+export const getGetDuaCategoriesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDuaCategories>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDuaCategories>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDuaCategoriesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getDuaCategories>>
+  > = ({ signal }) => getDuaCategories({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDuaCategories>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDuaCategoriesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDuaCategories>>
+>;
+export type GetDuaCategoriesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all dua categories
+ */
+
+export function useGetDuaCategories<
+  TData = Awaited<ReturnType<typeof getDuaCategories>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDuaCategories>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDuaCategoriesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get user's favorite duas
+ */
+export const getGetDuaFavoritesUrl = () => {
+  return `/api/duas/favorites`;
+};
+
+export const getDuaFavorites = async (
+  options?: RequestInit,
+): Promise<DuaListItem[]> => {
+  return customFetch<DuaListItem[]>(getGetDuaFavoritesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDuaFavoritesQueryKey = () => {
+  return [`/api/duas/favorites`] as const;
+};
+
+export const getGetDuaFavoritesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDuaFavorites>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDuaFavorites>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDuaFavoritesQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDuaFavorites>>> = ({
+    signal,
+  }) => getDuaFavorites({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDuaFavorites>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDuaFavoritesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDuaFavorites>>
+>;
+export type GetDuaFavoritesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get user's favorite duas
+ */
+
+export function useGetDuaFavorites<
+  TData = Awaited<ReturnType<typeof getDuaFavorites>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDuaFavorites>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDuaFavoritesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get recommended duas for a specific manasik ritual
+ */
+export const getGetDuasByMansakUrl = (mansakKey: string) => {
+  return `/api/duas/by-mansak/${mansakKey}`;
+};
+
+export const getDuasByMansak = async (
+  mansakKey: string,
+  options?: RequestInit,
+): Promise<DuaListItem[]> => {
+  return customFetch<DuaListItem[]>(getGetDuasByMansakUrl(mansakKey), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDuasByMansakQueryKey = (mansakKey: string) => {
+  return [`/api/duas/by-mansak/${mansakKey}`] as const;
+};
+
+export const getGetDuasByMansakQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDuasByMansak>>,
+  TError = ErrorType<unknown>,
+>(
+  mansakKey: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDuasByMansak>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetDuasByMansakQueryKey(mansakKey);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDuasByMansak>>> = ({
+    signal,
+  }) => getDuasByMansak(mansakKey, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!mansakKey,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDuasByMansak>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDuasByMansakQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDuasByMansak>>
+>;
+export type GetDuasByMansakQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get recommended duas for a specific manasik ritual
+ */
+
+export function useGetDuasByMansak<
+  TData = Awaited<ReturnType<typeof getDuasByMansak>>,
+  TError = ErrorType<unknown>,
+>(
+  mansakKey: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDuasByMansak>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDuasByMansakQueryOptions(mansakKey, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List duas with optional filters
+ */
+export const getGetDuasUrl = (params?: GetDuasParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/duas?${stringifiedParams}`
+    : `/api/duas`;
+};
+
+export const getDuas = async (
+  params?: GetDuasParams,
+  options?: RequestInit,
+): Promise<DuaPage> => {
+  return customFetch<DuaPage>(getGetDuasUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDuasQueryKey = (params?: GetDuasParams) => {
+  return [`/api/duas`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetDuasQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDuas>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetDuasParams,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getDuas>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDuasQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDuas>>> = ({
+    signal,
+  }) => getDuas(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDuas>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDuasQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDuas>>
+>;
+export type GetDuasQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List duas with optional filters
+ */
+
+export function useGetDuas<
+  TData = Awaited<ReturnType<typeof getDuas>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetDuasParams,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getDuas>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDuasQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get full dua detail
+ */
+export const getGetDuaUrl = (id: string) => {
+  return `/api/duas/${id}`;
+};
+
+export const getDua = async (
+  id: string,
+  options?: RequestInit,
+): Promise<DuaDetail> => {
+  return customFetch<DuaDetail>(getGetDuaUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDuaQueryKey = (id: string) => {
+  return [`/api/duas/${id}`] as const;
+};
+
+export const getGetDuaQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDua>>,
+  TError = ErrorType<void>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getDua>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDuaQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDua>>> = ({
+    signal,
+  }) => getDua(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getDua>>, TError, TData> & {
+    queryKey: QueryKey;
+  };
+};
+
+export type GetDuaQueryResult = NonNullable<Awaited<ReturnType<typeof getDua>>>;
+export type GetDuaQueryError = ErrorType<void>;
+
+/**
+ * @summary Get full dua detail
+ */
+
+export function useGetDua<
+  TData = Awaited<ReturnType<typeof getDua>>,
+  TError = ErrorType<void>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getDua>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDuaQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add dua to favorites
+ */
+export const getAddDuaFavoriteUrl = (id: string) => {
+  return `/api/duas/${id}/favorite`;
+};
+
+export const addDuaFavorite = async (
+  id: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getAddDuaFavoriteUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getAddDuaFavoriteMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addDuaFavorite>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addDuaFavorite>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["addDuaFavorite"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addDuaFavorite>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return addDuaFavorite(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddDuaFavoriteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addDuaFavorite>>
+>;
+
+export type AddDuaFavoriteMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add dua to favorites
+ */
+export const useAddDuaFavorite = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addDuaFavorite>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addDuaFavorite>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAddDuaFavoriteMutationOptions(options));
+};
+
+/**
+ * @summary Remove dua from favorites
+ */
+export const getRemoveDuaFavoriteUrl = (id: string) => {
+  return `/api/duas/${id}/favorite`;
+};
+
+export const removeDuaFavorite = async (
+  id: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getRemoveDuaFavoriteUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getRemoveDuaFavoriteMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeDuaFavorite>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof removeDuaFavorite>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["removeDuaFavorite"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof removeDuaFavorite>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return removeDuaFavorite(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RemoveDuaFavoriteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof removeDuaFavorite>>
+>;
+
+export type RemoveDuaFavoriteMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove dua from favorites
+ */
+export const useRemoveDuaFavorite = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeDuaFavorite>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof removeDuaFavorite>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getRemoveDuaFavoriteMutationOptions(options));
+};
+
+/**
+ * @summary Set the user's Hajj type (ifrad / tamattu / qiran)
+ */
+export const getUpdateNusukTypeUrl = () => {
+  return `/api/auth/nusuk-type`;
+};
+
+export const updateNusukType = async (
+  nusukTypeInput: NusukTypeInput,
+  options?: RequestInit,
+): Promise<User> => {
+  return customFetch<User>(getUpdateNusukTypeUrl(), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(nusukTypeInput),
+  });
+};
+
+export const getUpdateNusukTypeMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateNusukType>>,
+    TError,
+    { data: BodyType<NusukTypeInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateNusukType>>,
+  TError,
+  { data: BodyType<NusukTypeInput> },
+  TContext
+> => {
+  const mutationKey = ["updateNusukType"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateNusukType>>,
+    { data: BodyType<NusukTypeInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateNusukType(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateNusukTypeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateNusukType>>
+>;
+export type UpdateNusukTypeMutationBody = BodyType<NusukTypeInput>;
+export type UpdateNusukTypeMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Set the user's Hajj type (ifrad / tamattu / qiran)
+ */
+export const useUpdateNusukType = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateNusukType>>,
+    TError,
+    { data: BodyType<NusukTypeInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateNusukType>>,
+  TError,
+  { data: BodyType<NusukTypeInput> },
+  TContext
+> => {
+  return useMutation(getUpdateNusukTypeMutationOptions(options));
+};

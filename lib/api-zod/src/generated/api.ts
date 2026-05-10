@@ -551,3 +551,158 @@ export const GetDashboardResponse = zod.object({
     })
     .nullish(),
 });
+
+/**
+ * @summary List all dua categories
+ */
+export const GetDuaCategoriesResponseItem = zod.object({
+  id: zod.string().uuid(),
+  nameAr: zod.string(),
+  nameEn: zod.string().nullish(),
+  emoji: zod.string(),
+  color: zod.string(),
+  descriptionAr: zod.string().nullish(),
+  orderIndex: zod.number(),
+  duasCount: zod.number(),
+});
+export const GetDuaCategoriesResponse = zod.array(GetDuaCategoriesResponseItem);
+
+/**
+ * @summary Get user's favorite duas
+ */
+export const GetDuaFavoritesResponseItem = zod.object({
+  id: zod.string().uuid(),
+  titleAr: zod.string(),
+  titleEn: zod.string().nullish(),
+  arabicText: zod.string(),
+  source: zod.string().nullish(),
+  duaType: zod.string().optional(),
+  categoryId: zod.string().uuid().nullish(),
+  isFeatured: zod.boolean(),
+  isFavorited: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+export const GetDuaFavoritesResponse = zod.array(GetDuaFavoritesResponseItem);
+
+/**
+ * @summary Get recommended duas for a specific manasik ritual
+ */
+export const GetDuasByMansakParams = zod.object({
+  mansakKey: zod.coerce.string(),
+});
+
+export const GetDuasByMansakResponseItem = zod.object({
+  id: zod.string().uuid(),
+  titleAr: zod.string(),
+  titleEn: zod.string().nullish(),
+  arabicText: zod.string(),
+  source: zod.string().nullish(),
+  duaType: zod.string().optional(),
+  categoryId: zod.string().uuid().nullish(),
+  isFeatured: zod.boolean(),
+  isFavorited: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+export const GetDuasByMansakResponse = zod.array(GetDuasByMansakResponseItem);
+
+/**
+ * @summary List duas with optional filters
+ */
+export const getDuasQueryPageDefault = 0;
+export const getDuasQuerySizeDefault = 20;
+
+export const GetDuasQueryParams = zod.object({
+  category_id: zod.coerce.string().uuid().optional(),
+  type: zod.coerce.string().optional(),
+  search: zod.coerce.string().optional(),
+  page: zod.coerce.number().default(getDuasQueryPageDefault),
+  size: zod.coerce.number().default(getDuasQuerySizeDefault),
+});
+
+export const GetDuasResponse = zod.object({
+  content: zod.array(
+    zod.object({
+      id: zod.string().uuid(),
+      titleAr: zod.string(),
+      titleEn: zod.string().nullish(),
+      arabicText: zod.string(),
+      source: zod.string().nullish(),
+      duaType: zod.string().optional(),
+      categoryId: zod.string().uuid().nullish(),
+      isFeatured: zod.boolean(),
+      isFavorited: zod.boolean(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+  total: zod.number(),
+  page: zod.number(),
+  size: zod.number(),
+  totalPages: zod.number(),
+});
+
+/**
+ * @summary Get full dua detail
+ */
+export const GetDuaParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const GetDuaResponse = zod.object({
+  id: zod.string().uuid(),
+  titleAr: zod.string(),
+  titleEn: zod.string().nullish(),
+  arabicText: zod.string(),
+  transliteration: zod.string().nullish(),
+  translationAr: zod.string().nullish(),
+  translationEn: zod.string().nullish(),
+  translationFr: zod.string().nullish(),
+  source: zod.string().nullish(),
+  duaType: zod.string().optional(),
+  categoryId: zod.string().uuid().nullish(),
+  mansakKey: zod.string().nullish(),
+  isFeatured: zod.boolean(),
+  isFavorited: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  category: zod
+    .object({
+      id: zod.string().optional(),
+      nameAr: zod.string().optional(),
+      emoji: zod.string().optional(),
+      color: zod.string().optional(),
+    })
+    .nullish(),
+});
+
+/**
+ * @summary Add dua to favorites
+ */
+export const AddDuaFavoriteParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+/**
+ * @summary Remove dua from favorites
+ */
+export const RemoveDuaFavoriteParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+/**
+ * @summary Set the user's Hajj type (ifrad / tamattu / qiran)
+ */
+export const UpdateNusukTypeBody = zod.object({
+  nusukType: zod.enum(["ifrad", "tamattu", "qiran"]),
+});
+
+export const UpdateNusukTypeResponse = zod.object({
+  id: zod.string().uuid(),
+  passportNo: zod.string(),
+  fullNameAr: zod.string(),
+  fullNameEn: zod.string().nullish(),
+  nationality: zod.string(),
+  phone: zod.string(),
+  tentZone: zod.string().nullish(),
+  groupId: zod.string().uuid().nullish(),
+  emergencyContact: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});

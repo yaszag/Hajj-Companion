@@ -8,6 +8,7 @@ import placesRouter from "./places";
 import navigationRouter from "./navigation";
 import emergencyRouter from "./emergency";
 import dashboardRouter from "./dashboard";
+import duasRouter from "./duas";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(placesRouter);
 router.use(navigationRouter);
 router.use(emergencyRouter);
 router.use(dashboardRouter);
+router.use(duasRouter);
 
 export default router;

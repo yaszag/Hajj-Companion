@@ -1,0 +1,565 @@
+# Hajj App V2 — Feature Additions, Bug Fixes & Enhancements
+## Context: Existing MVP in Spring Boot + Flutter + React PWA
+
+You are continuing development on an existing Hajj companion app (Spring Boot backend, Flutter mobile, React PWA). The MVP is working. Now implement the following in order of priority: new features, bug fixes, then enhancements.
+
+Read all sections carefully before writing any code. Justify architecture decisions in comments.
+
+---
+
+## PRIORITY 0 — UNDERSTAND THE EXISTING CODEBASE FIRST
+
+Before writing code:
+1. List all existing screens, services, and API endpoints you know about
+2. Identify what needs to change vs what stays the same
+3. Ask clarifying questions only if truly blocking — otherwise proceed with best assumptions
+
+---
+
+## ═══════════════════════════════════════════
+## SECTION A — NEW FEATURE: DUA SECTION (HIGHEST PRIORITY)
+## ═══════════════════════════════════════════
+
+This is the most important new feature. Make it polished, rich, and spiritually meaningful.
+
+### A1. Overview
+A dedicated "أدعية" (Supplications) section that contains:
+  1. Categorized duas — browsable by category with many entries per category
+  2. Full long duas — complete supplications from beginning to end (not snippets)
+  3. Offline 100% — all content seeded in database, cached locally
+
+### A2. Database Tables
+
+#### duas
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  title_ar      VARCHAR(200) NOT NULL      -- e.g. "دعاء دخول المسجد"
+  title_en      VARCHAR(200)
+  arabic_text   TEXT NOT NULL              -- full Arabic text with tashkeel
+  transliteration TEXT                    -- phonetic for non-Arabic speakers
+  translation_ar  TEXT                    -- meaning in simple Arabic
+  translation_fr  TEXT                    -- French (many Tunisian pilgrims)
+  translation_en  TEXT
+  category_id   UUID REFERENCES dua_categories(id)
+  dua_type      VARCHAR(20) DEFAULT 'short'  -- 'short' | 'long' | 'full_sequence'
+  source        VARCHAR(200)               -- e.g. "البخاري، رقم 1234"
+  mansak_key    VARCHAR(30)                -- linked to ritual (nullable)
+  is_featured   BOOLEAN DEFAULT false
+  order_index   INT DEFAULT 0
+  audio_url     TEXT                       -- optional TTS audio
+  created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+#### dua_categories
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  name_ar       VARCHAR(100) NOT NULL
+  name_en       VARCHAR(100)
+  name_fr       VARCHAR(100)
+  emoji         VARCHAR(10) NOT NULL
+  color         VARCHAR(7) NOT NULL        -- hex color for category card
+  description_ar TEXT
+  order_index   INT DEFAULT 0
+  duas_count    INT DEFAULT 0             -- denormalized for display
+
+#### user_dua_favorites
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  user_id       UUID REFERENCES users(id) ON DELETE CASCADE
+  dua_id        UUID REFERENCES duas(id) ON DELETE CASCADE
+  created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  UNIQUE (user_id, dua_id)
+
+### A3. Categories to Seed (implement ALL of these)
+
+Seed the following categories with REAL, AUTHENTIC duas (research and include the full Arabic text with tashkeel, source, and translation):
+
+  1. 🕋 أدعية المناسك
+     - دعاء الإحرام, دعاء الطواف (7 duas, one per shawt), دعاء الملتزم,
+       دعاء السعي, دعاء عرفات (long), دعاء الجمرات, دعاء طواف الوداع
+
+  2. 🌅 أدعية الصباح والمساء
+     - أذكار الصباح (12 duas), أذكار المساء (12 duas), دعاء النوم, دعاء الاستيقاظ
+
+  3. 🕌 أدعية الصلاة
+     - دعاء الاستفتاح, دعاء الركوع, دعاء السجود, دعاء التشهد, دعاء القنوت,
+       دعاء بعد الصلاة (full sequence)
+
+  4. 📿 أدعية جامعة (General powerful duas)
+     - دعاء سيد الاستغفار (full), دعاء كرب, دعاء الكرب الثلاثة,
+       دعاء يونس, أدعية قرآنية (10+), دعاء ختم القرآن
+
+  5. 🌙 أدعية ليلة القدر
+     - دعاء ليلة القدر, الدعاء المأثور في العشر الأواخر
+
+  6. 🤲 أدعية الطوارئ والضيق
+     - دعاء الهم والغم, دعاء الضيق, دعاء الدّين, دعاء المريض,
+       دعاء الضياع (relevant for Hajj!)
+
+  7. 🏡 أدعية المكان والسفر
+     - دعاء السفر, دعاء دخول مكة, دعاء رؤية الكعبة (الأول مرة),
+       دعاء دخول الفندق, دعاء المنزل
+
+  8. 🌟 الأدعية الطويلة الكاملة (dua_type = 'full_sequence')
+     - دعاء عرفات الكامل (the most important — long, famous duas)
+     - دعاء الجوشن الكبير (sections)
+     - دعاء الندبة
+     - حزب البحر للشاذلي
+     - دعاء كميل
+     - دعاء التوبة الكامل
+     - ورد الطريقة التجانية (relevant for many North African pilgrims)
+
+### A4. API Endpoints
+
+  GET    /duas/categories
+    Response: [ { id, name_ar, emoji, color, duas_count } ]
+
+  GET    /duas?category_id=&type=&search=&page=&size=
+    Response: { content: [ { id, title_ar, arabic_text, category, is_favorited } ], total }
+
+  GET    /duas/{id}
+    Response: { full dua with all translations + related duas }
+
+  POST   /duas/{id}/favorite
+  DELETE /duas/{id}/favorite
+  GET    /duas/favorites         -- user's saved duas
+
+  GET    /duas/by-mansak/{mansakKey}
+    Response: [ recommended duas for this specific ritual ]
+
+### A5. Flutter — Dua Section UI
+
+New bottom nav tab: "أدعية 📿" — this should be the 2nd tab (prominent position).
+
+#### Dua Home Screen (dua_home_screen.dart)
+  Layout:
+  - Search bar at top (searches title + arabic text)
+  - Featured long dua card (rotating daily, e.g. "دعاء اليوم")
+  - Category grid (2 columns, each card: emoji + Arabic name + count + color)
+  - "الأدعية الطويلة الكاملة" horizontal scroll section
+
+#### Category Detail Screen (dua_category_screen.dart)
+  - Category header with color + emoji
+  - List of duas, each card shows:
+      * Arabic title
+      * First line of arabic text (preview)
+      * Source reference
+      * Favorite heart button
+      * Tap → full dua screen
+
+#### Full Dua Screen (dua_detail_screen.dart)
+  THIS IS THE MOST IMPORTANT SCREEN. Make it beautiful and functional:
+
+  Top controls bar:
+    - Font size slider (small / medium / large / xlarge)
+    - Toggle: show/hide transliteration
+    - Toggle: show/hide translation
+    - Language selector for translation (AR / FR / EN)
+    - Favorite button (heart)
+    - Share button (share Arabic text)
+
+  Main content (scrollable):
+    - Bismillah header (if dua starts with it)
+    - Arabic text in large, beautiful serif font (e.g. Amiri or Scheherazade)
+    - Tashkeel must display correctly
+    - For long duas: divided into paragraphs with subtle dividers
+    - Below each paragraph: its translation (collapsible)
+    - Source citation at bottom: "رواه البخاري..."
+
+  For dua_type = 'full_sequence':
+    - Show a progress indicator (e.g. "الجزء 3 من 7")
+    - "التالي" / "السابق" navigation between sections
+    - Auto-scroll option with speed control
+
+  Bottom actions:
+    - "📢 اقرأ بصوت عالٍ" — if audio_url exists, play it
+    - "🔗 شارك النص"
+    - "📋 انسخ"
+
+### A6. Special UI Behavior for Dua Section
+  - Night mode friendly (dark background option just for this section)
+  - Remember last font size per user (persisted in SharedPreferences)
+  - Offline: all duas cached in SQLite after first load (or seeded at install)
+  - Search: full-text search across arabic_text, title_ar (SQLite FTS5)
+
+---
+
+## ═══════════════════════════════════════════
+## SECTION B — NEW FEATURE: THREE TYPES OF NUSUK
+## ═══════════════════════════════════════════
+
+### B1. Hajj Types Explanation (research and implement correctly)
+
+There are 3 valid types of Hajj. The user selects one during onboarding or from settings:
+
+  IFRAD (الإفراد):
+    - Pilgrim performs Hajj only, no Umrah combined
+    - Does NOT slaughter (no hady required)
+    - Ihram is for Hajj only from the very start
+    - Manasik sequence: Ihram → Tawaf Qudum → Stay in Mina (8th) →
+      Wuquf Arafat → Muzdalifa → Rami → (no Nahr required) → Halq/Taqsir →
+      Tawaf Ifada + Sa'i (if not done) → Mina days → Tawaf Wada'
+    - Note: Maliki madhab — Tawaf Qudum is Sunnah not Wajib for Ifrad
+
+  TAMATTU' (التمتع):
+    - Performs Umrah first in Hajj months, then releases Ihram, then re-enters Ihram for Hajj
+    - Hady (slaughter) is REQUIRED (Rukn according to majority)
+    - Most common for non-residents of Mecca
+    - Sequence: Umrah Ihram → Tawaf + Sa'i → Halq/Taqsir → EXIT IHRAM →
+      Re-enter Ihram on 8th → Mina → Arafat → Muzdalifa → Rami → Nahr (required) →
+      Halq → Tawaf Ifada → Mina days → Tawaf Wada'
+
+  QIRAN (القران):
+    - Combines Hajj and Umrah in ONE Ihram, never exits Ihram until Mina
+    - Hady is REQUIRED (same as Tamattu')
+    - One Tawaf and one Sa'i suffices for both (Maliki: recommended to do two)
+    - Sequence: Combined Ihram → Tawaf Qudum + Sa'i → Stay in Ihram →
+      Mina → Arafat → Muzdalifa → Rami → Nahr → Halq → Tawaf Ifada → Mina → Wada'
+
+### B2. Database Changes
+
+  ALTER TABLE users ADD COLUMN nusuk_type VARCHAR(10)
+    -- CHECK nusuk_type IN ('ifrad', 'tamattu', 'qiran')
+
+  New table: manasik_templates
+    id            UUID PRIMARY KEY
+    mansak_key    VARCHAR(30) NOT NULL
+    nusuk_type    VARCHAR(10) NOT NULL     -- which hajj type this applies to
+    title_ar      VARCHAR(200) NOT NULL
+    title_en      VARCHAR(100)
+    order_index   INT NOT NULL
+    is_required   BOOLEAN DEFAULT true    -- false = optional/sunnah
+    category      VARCHAR(20)            -- 'rukn'|'wajib'|'sunnah'
+    day_number    INT                    -- 1=8th Dhul Hijja, 2=9th, etc.
+    PRIMARY KEY (mansak_key, nusuk_type)
+
+### B3. Onboarding Flow
+  After login/register, if nusuk_type is null → show selection screen:
+
+  Screen: "اختر نوع نسكك" (select_nusuk_screen.dart)
+    - 3 large cards, each with:
+        * Arabic name (large) + English name (small)
+        * 2-line description of who it's for
+        * Key difference highlighted
+    - "الأكثر شيوعاً" badge on Tamattu'
+    - Confirmation: "هل أنت متأكد؟ يمكنك تغيير هذا لاحقاً من الإعدادات"
+    - Save to user profile → filter all manasik queries by nusuk_type
+
+### B4. Manasik Filtering
+  All /manasik API calls must filter by user's nusuk_type.
+  The manasik list and progress screens show ONLY the rituals applicable to the user's chosen type.
+
+---
+
+## ═══════════════════════════════════════════
+## SECTION C — BUG FIXES
+## ═══════════════════════════════════════════
+
+### BUG 1: Groups Not Working Correctly
+
+Investigate and fix the following likely issues:
+
+  Issue 1 — WebSocket group subscription not working:
+    - Symptom: members don't see each other's locations in real-time
+    - Fix: ensure STOMP subscription uses correct topic pattern /topic/group/{groupId}
+    - Verify Redis pub/sub channel naming is consistent: "group:{groupId}:location"
+    - Add connection state indicator on group map screen (connected/disconnected)
+    - Handle reconnection: auto-reconnect WebSocket after 5s if disconnected
+
+  Issue 2 — Invite code joining:
+    - Symptom: invite code may be case-sensitive or have whitespace issues
+    - Fix: normalize invite_code to UPPERCASE on save and on lookup
+    - Add proper error messages in Arabic: "الكود غير صحيح" / "المجموعة ممتلئة"
+    - Add loading state during join request
+
+  Issue 3 — Member list not refreshing:
+    - Fix: after joining group, invalidate group members cache
+    - On group screen mount: always fetch fresh member list
+    - Add pull-to-refresh on group member list
+
+  Issue 4 — Group leader permissions:
+    - Only group leader can: rename group, remove members, dissolve group
+    - Add isLeader flag to member list response
+
+  Fix approach:
+    - Add comprehensive logging to GroupService and WebSocket handler
+    - Write integration tests for: create group → join → send location → receive location
+    - Add /groups/{id}/ping endpoint for debugging connectivity
+
+### BUG 2: Navigation Screen Returns Wrong Results
+
+Root cause analysis and complete fix:
+
+  Issue 1 — Bearing calculation wrong:
+    The bearing formula must use atan2(y, x) NOT atan2(x, y).
+    Correct implementation:
+      double calculateBearing(double lat1, double lon1, double lat2, double lon2) {
+        final lat1Rad = lat1 * pi / 180;
+        final lat2Rad = lat2 * pi / 180;
+        final dLon = (lon2 - lon1) * pi / 180;
+        final y = sin(dLon) * cos(lat2Rad);
+        final x = cos(lat1Rad) * sin(lat2Rad) -
+                  sin(lat1Rad) * cos(lat2Rad) * cos(dLon);
+        final bearing = atan2(y, x) * 180 / pi;
+        return (bearing + 360) % 360; // normalize to 0-360
+      }
+    Add unit tests for known coordinate pairs:
+      - Mina → Kaaba: should be ~270° (west)
+      - Kaaba → Arafat: should be ~120° (southeast)
+
+  Issue 2 — Arrow not accounting for device rotation:
+    The arrow should point NORTH-relative to destination, MINUS device heading.
+    arrowRotation = bearingToDestination - deviceHeading
+    If deviceHeading unavailable → show bearing degrees as text only, no rotating arrow
+
+  Issue 3 — Distance sometimes shows 0 or NaN:
+    - Guard against null GPS before calculating
+    - Guard against identical coordinates (distance = 0 is valid — show "أنت هنا")
+    - Add null safety throughout NavigationService
+
+  Issue 4 — ETA unrealistic:
+    - Hajj walking speed is ~0.8 m/s (slower due to crowds, elderly)
+    - Add crowd factor: if zone = mina during rami days → use 0.5 m/s
+    - Show range: "~10 - 15 دقيقة" not exact
+
+---
+
+## ═══════════════════════════════════════════
+## SECTION D — ENHANCEMENTS
+## ═══════════════════════════════════════════
+
+### ENHANCEMENT 1: Manasik — Revert to Previous Status
+
+  Currently: status only goes forward (pending → in_progress → completed)
+  Add: user can go BACK (completed → in_progress → pending)
+
+  UI change:
+    On mansak detail screen, when status = 'completed':
+      - Show "↩️ تراجع عن الإنجاز" button (secondary, smaller than main action)
+      - Confirmation dialog: "هل تريد التراجع عن تسجيل إنجاز هذا المنسك؟"
+    When status = 'in_progress':
+      - Show "↩️ لم أبدأ بعد" link
+
+  API change:
+    PATCH /manasik/{key}/progress
+      { "status": "pending" | "in_progress" | "completed" }
+    Backend: allow any direction change, validate only that status is one of the 3 values.
+    Log the revert in manasik_progress_history table for analytics.
+
+### ENHANCEMENT 2: Manasik — Arkaan / Wajibat / Sunan Classification
+
+  Each mansak step must be classified as one of:
+    RUKN (ركن) — red/critical: if missed, Hajj is invalid, cannot be compensated
+    WAJIB (واجب) — orange/important: if missed deliberately, requires fidya (expiation)
+    SUNNAH (سنة) — green/optional: recommended but no penalty if missed
+
+  Maliki Madhab specifics to implement:
+    Arkan (ركن) in Maliki:
+      - الإحرام (Ihram with intention)
+      - الوقوف بعرفة (Wuquf at Arafat) — MOST IMPORTANT
+      - طواف الإفاضة (Tawaf Ifada)
+      - السعي (Sa'i) — between Safa and Marwa
+      Note: Maliki does NOT consider Rami a Rukn (it's Wajib)
+
+    Wajibat (واجب) in Maliki:
+      - الإحرام من الميقات (Ihram from Miqat)
+      - المبيت بمزدلفة (staying Muzdalifa night)
+      - المبيت بمنى (staying Mina nights)
+      - رمي الجمرات (Rami)
+      - الحلق أو التقصير (Halq/Taqsir)
+      - طواف الوداع (Tawaf Wada' — for non-Meccans)
+      - الهدي for Tamattu'/Qiran
+
+    Sunan (سنة) in Maliki:
+      - طواف القدوم (Tawaf Qudum — NOT required in Maliki for Ifrad/Qiran)
+      - الاضطباع في الطواف
+      - الرمل في الأشواط الثلاثة الأولى
+      - الدعاء بين الجمرتين
+
+  UI implementation:
+    Color coding system:
+      RUKN   → #E24B4A (red)  + badge "ركن" — with warning icon ⚠️
+      WAJIB  → #EF9F27 (amber) + badge "واجب"
+      SUNNAH → #1D9E75 (green) + badge "سنة"
+
+    In manasik list:
+      - Each card has a colored left border (4px) matching its category
+      - Category badge in top-right corner of card
+      - Rukn items always show at top within each day's list
+
+    In mansak detail screen:
+      - Hero section has colored background matching category
+      - Warning box for Rukn: "⚠️ هذا ركن — تركه يبطل الحج"
+      - Info box for Wajib: "ℹ️ هذا واجب — تركه يوجب الفدية"
+      - Encouragement for Sunnah: "🌟 سنة — يستحب فعلها"
+
+### ENHANCEMENT 3: Rich Mansak Details (Maliki Madhab Priority)
+
+  Each mansak detail screen must contain comprehensive, helpful content:
+
+  Section 1 — ماهو هذا المنسك؟
+    Clear Arabic explanation of what this ritual is, its purpose, and its spiritual meaning.
+    Keep it accessible for all education levels.
+
+  Section 2 — كيف تؤديه خطوة بخطوة
+    Numbered steps, each step classified with a colored dot:
+      🔴 Step is Rukn | 🟠 Step is Wajib | 🟢 Step is Sunnah
+    Each step: title + 2-3 sentence explanation + common mistake to avoid
+
+  Section 3 — ماذا يقول المالكية
+    Dedicated block explaining the Maliki ruling:
+      - Is it Rukn/Wajib/Sunnah according to Maliki?
+      - Maliki-specific notes (e.g. "المالكية لا يشترطون طواف القدوم")
+      - Comparison note if relevant: "يخالف الحنابلة في..."
+
+  Section 4 — السنن المستحبة
+    Expandable list of recommended sunnas for this ritual:
+      Each sunnah: name + how to do it + its source
+      Examples for Tawaf: الاضطباع, الرمل, استلام الركن اليماني, الدعاء المأثور
+
+  Section 5 — الأخطاء الشائعة
+    3-5 common mistakes pilgrims make, with correction:
+      ❌ الخطأ: "يعتقد بعض الحجاج أن الطواف يبدأ من الركن اليماني"
+      ✅ الصواب: "يبدأ الطواف من الحجر الأسود ويسير عكس عقارب الساعة"
+
+  Section 6 — الأدعية المخصصة
+    Pull related duas from dua table (mansak_key filter)
+    Show as expandable cards within the mansak detail
+
+  Section 7 — نصائح عملية
+    Practical tips specific to Hajj conditions:
+      - Best time to do this ritual to avoid crowds
+      - What to bring
+      - Health and safety tips
+      - Accessibility options for elderly/disabled
+
+  Implement all of the above for each of the 8 base manasik + any added ones per nusuk type.
+
+### ENHANCEMENT 4: Navigation — Real Bird's-Eye Compass Arrow
+
+  Complete rewrite of compass_navigation_screen.dart:
+
+  The arrow must behave like a GPS compass (bird navigation) — it always points
+  toward the destination relative to which way the DEVICE IS FACING.
+
+  Correct implementation:
+
+    Step 1 — Get device heading (magnetic north):
+      // Use flutter_compass package
+      FlutterCompass.events!.listen((CompassEvent event) {
+        deviceHeading = event.heading ?? 0; // degrees from magnetic north
+      });
+
+    Step 2 — Calculate bearing to destination:
+      double bearingToDestination = calculateBearing(
+        currentLat, currentLng, destLat, destLng
+      );
+
+    Step 3 — Calculate arrow rotation:
+      // Relative angle = where destination is, relative to device facing direction
+      double arrowAngle = bearingToDestination - deviceHeading;
+      // Normalize to -180 to 180 for shortest rotation
+      arrowAngle = ((arrowAngle + 540) % 360) - 180;
+
+    Step 4 — Animate smoothly:
+      // Use AnimationController to smoothly interpolate between angle values
+      // Avoid jumping from 359° to 0° — always take shortest path
+      _animController.animateTo(
+        arrowAngle / 360,
+        duration: Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+
+  Compass UI (CustomPainter):
+    - Outer ring: compass rose with N/S/E/W Arabic labels (ش/ج/ش.ق/غ)
+    - Cardinal dots at 45° intervals
+    - Center: large directional arrow (animated, smooth rotation)
+    - Arrow style: thick, solid, with arrowhead — not thin line
+    - Arrow color: green when distance < 200m, amber 200-500m, white/blue otherwise
+
+  Fallback (if no compass sensor or permission denied):
+    - Use GPS track direction (bearing between last 2 GPS points)
+    - Minimum speed for track direction: 0.5 m/s (don't use if standing still)
+    - Show message: "حرّك جهازك للحصول على اتجاه أدق"
+    - Display static arrow with bearing text: "اتجه شمالاً — 847 م"
+
+  Additional navigation UI improvements:
+    - Haptic feedback at: 500m, 200m, 100m, 50m, arrival (different patterns)
+    - Distance display with smooth counter animation (not jumping)
+    - Speed indicator: "سرعتك: 1.2 كم/س"
+    - Altitude difference indicator (if destination is higher/lower floor)
+    - "الاتصال بـ GPS ضعيف" warning if accuracy > 30m
+
+---
+
+## ═══════════════════════════════════════════
+## SECTION E — DATABASE MIGRATIONS
+## ═══════════════════════════════════════════
+
+  Write Flyway migrations in order:
+    V4__add_nusuk_type.sql          -- ALTER users, add manasik_templates
+    V5__dua_tables.sql              -- duas, dua_categories, user_dua_favorites
+    V6__seed_dua_categories.sql     -- all 8 categories with emojis and colors
+    V7__seed_duas_manasik.sql       -- all Hajj ritual duas with full Arabic text
+    V8__seed_duas_morning_evening.sql -- أذكار الصباح والمساء (12+12)
+    V9__seed_duas_general.sql       -- أدعية جامعة, long duas, travel duas
+    V10__mansak_classification.sql  -- add category (rukn/wajib/sunnah) to manasik
+    V11__navigation_fix.sql         -- add navigation_session improvements
+    V12__manasik_progress_history.sql -- track revert actions
+
+---
+
+## ═══════════════════════════════════════════
+## SECTION F — NEW FLUTTER SCREENS SUMMARY
+## ═══════════════════════════════════════════
+
+  New screens to create:
+    dua_home_screen.dart             -- main dua tab
+    dua_category_screen.dart         -- category detail + list
+    dua_detail_screen.dart           -- full dua display (the most important)
+    select_nusuk_screen.dart         -- onboarding type selection
+    manasik_detail_v2_screen.dart    -- enhanced mansak detail (replace existing)
+
+  Modified screens:
+    compass_navigation_screen.dart   -- complete rewrite (fix + enhance)
+    group_screen.dart                -- fix WebSocket + reconnection
+    manasik_list_screen.dart         -- add nusuk filter + rukn/wajib/sunnah badges
+
+  Bottom navigation update:
+    Tab 1: 🏠 الرئيسية
+    Tab 2: 📿 أدعية   ← NEW (make this prominent)
+    Tab 3: 📋 المناسك
+    Tab 4: 🗺️ الخريطة
+    Tab 5: 👤 بطاقتي
+
+---
+
+## ═══════════════════════════════════════════
+## SECTION G — EXECUTION ORDER
+## ═══════════════════════════════════════════
+
+Generate code in this exact order:
+
+  1. Database migrations (V4 → V12) with full seed data for duas
+  2. Spring Boot: Dua entities + DTOs + Repository + Service + Controller
+  3. Spring Boot: Nusuk type filtering for ManasikController
+  4. Spring Boot: Group bug fixes (WebSocket + invite code)
+  5. Spring Boot: Navigation endpoint fixes (bearing formula)
+  6. Flutter: select_nusuk_screen.dart
+  7. Flutter: dua_home_screen.dart + dua_category_screen.dart + dua_detail_screen.dart
+  8. Flutter: manasik_detail_v2_screen.dart (full enhanced version)
+  9. Flutter: compass_navigation_screen.dart (complete rewrite)
+  10. Flutter: group_screen.dart (bug fixes)
+  11. React PWA: Dua section (/duas route)
+  12. React PWA: Navigation screen fix
+
+After each file: briefly explain key decisions in 2-3 lines.
+
+---
+
+## CONSTRAINTS
+
+- Maliki madhab is the default and primary reference for all fiqh content
+- All Arabic text must use proper Unicode with tashkeel where needed
+- Dua Arabic text must be sourced from authenticated hadith — mention source
+- No hardcoded strings in UI — use localization keys (already set up)
+- RTL layout for all new screens
+- Every new screen must work 100% offline after first data load
+- Navigation math: NO external API — pure device math only
+- Font for dua text: use Google Fonts 'Amiri' or 'Scheherazade New' for quran-style display

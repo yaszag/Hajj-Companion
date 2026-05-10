@@ -123,6 +123,28 @@ router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
   res.json(sanitizeUser(user));
 });
 
+// PATCH /auth/nusuk-type — set Hajj type (ifrad / tamattu / qiran)
+router.patch("/auth/nusuk-type", requireAuth, async (req, res): Promise<void> => {
+  const { nusukType } = req.body;
+  if (!["ifrad", "tamattu", "qiran"].includes(nusukType)) {
+    res.status(400).json({ error: "نوع النسك غير صحيح — يجب أن يكون: ifrad أو tamattu أو qiran" });
+    return;
+  }
+
+  const [user] = await db
+    .update(usersTable)
+    .set({ nusukType })
+    .where(eq(usersTable.id, req.userId!))
+    .returning();
+
+  if (!user) {
+    res.status(404).json({ error: "المستخدم غير موجود" });
+    return;
+  }
+
+  res.json(sanitizeUser(user));
+});
+
 function sanitizeUser(user: typeof usersTable.$inferSelect) {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { passwordHash, ...safe } = user;

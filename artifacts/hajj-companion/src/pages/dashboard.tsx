@@ -22,8 +22,7 @@ export default function Dashboard() {
   }, []);
 
   const { data: dashboard, isLoading } = useGetDashboard(
-    coords ? { lat: coords.lat, lng: coords.lng } : undefined,
-    { query: { enabled: true } }
+    coords ? { lat: coords.lat, lng: coords.lng } : undefined
   );
 
   return (
