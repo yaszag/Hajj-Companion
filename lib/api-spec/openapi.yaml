@@ -1,22 +1,37 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Hajj Companion API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: groups
+    description: Pilgrim groups
+  - name: locations
+    description: Location tracking
+  - name: manasik
+    description: Hajj rituals progress
+  - name: places
+    description: Personal saved places
+  - name: navigation
+    description: Compass navigation sessions
+  - name: emergency
+    description: Emergency alerts
+  - name: dashboard
+    description: Summary dashboard
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +39,1208 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # AUTH
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new pilgrim
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Phone or passport already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with phone/passport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/refresh:
+    post:
+      operationId: refreshToken
+      tags: [auth]
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshInput"
+      responses:
+        "200":
+          description: New tokens
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user profile
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # GROUPS
+  /groups:
+    post:
+      operationId: createGroup
+      tags: [groups]
+      summary: Create a new group
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GroupInput"
+      responses:
+        "201":
+          description: Group created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Group"
+
+  /groups/join:
+    post:
+      operationId: joinGroup
+      tags: [groups]
+      summary: Join a group by invite code
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JoinGroupInput"
+      responses:
+        "200":
+          description: Joined group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Group"
+        "404":
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /groups/{id}:
+    get:
+      operationId: getGroup
+      tags: [groups]
+      summary: Get group details
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Group details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Group"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /groups/{id}/members:
+    get:
+      operationId: getGroupMembers
+      tags: [groups]
+      summary: List group members
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Member list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GroupMember"
+
+  # LOCATIONS
+  /locations/sync:
+    post:
+      operationId: syncLocations
+      tags: [locations]
+      summary: Sync batch of location points (offline-safe)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LocationBatch"
+      responses:
+        "200":
+          description: Synced
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncResult"
+
+  /locations/group/{groupId}/live:
+    get:
+      operationId: getGroupLiveLocations
+      tags: [locations]
+      summary: Get latest location for each group member
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Live member locations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MemberLocation"
+
+  # MANASIK
+  /manasik:
+    get:
+      operationId: getManasik
+      tags: [manasik]
+      summary: List all Hajj rituals with user progress
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Manasik list with progress
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ManasikItem"
+
+  /manasik/{key}/progress:
+    patch:
+      operationId: updateManasikProgress
+      tags: [manasik]
+      summary: Update progress for a mansak ritual
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ManasikProgressUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManasikItem"
+
+  # PERSONAL PLACES
+  /places:
+    get:
+      operationId: getPlaces
+      tags: [places]
+      summary: List user's saved places (with optional distance sorting)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lat
+          in: query
+          required: false
+          schema:
+            type: number
+        - name: lng
+          in: query
+          required: false
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Places list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Place"
+    post:
+      operationId: createPlace
+      tags: [places]
+      summary: Save a new personal place
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaceInput"
+      responses:
+        "201":
+          description: Place created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Place"
+
+  /places/group/{groupId}:
+    get:
+      operationId: getGroupPlaces
+      tags: [places]
+      summary: Get shared places from all group members
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Shared group places
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Place"
+
+  /places/{id}:
+    get:
+      operationId: getPlace
+      tags: [places]
+      summary: Get place details with navigation history
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Place details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaceDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updatePlace
+      tags: [places]
+      summary: Update a saved place
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaceUpdate"
+      responses:
+        "200":
+          description: Updated place
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Place"
+    delete:
+      operationId: deletePlace
+      tags: [places]
+      summary: Delete a saved place
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Deleted
+
+  # NAVIGATION
+  /navigation/start:
+    post:
+      operationId: startNavigation
+      tags: [navigation]
+      summary: Start a navigation session to a place or coordinates
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NavigationStart"
+      responses:
+        "201":
+          description: Navigation session started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationSession"
+
+  /navigation/history:
+    get:
+      operationId: getNavigationHistory
+      tags: [navigation]
+      summary: Get user's past navigation sessions
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Navigation history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NavigationHistoryItem"
+
+  /navigation/{sessionId}/update:
+    post:
+      operationId: updateNavigation
+      tags: [navigation]
+      summary: Update current position and get navigation guidance
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NavigationPosition"
+      responses:
+        "200":
+          description: Navigation update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationUpdate"
+
+  /navigation/{sessionId}/complete:
+    post:
+      operationId: completeNavigation
+      tags: [navigation]
+      summary: Mark navigation session as complete (arrived)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Navigation completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationComplete"
+
+  /navigation/{sessionId}/cancel:
+    post:
+      operationId: cancelNavigation
+      tags: [navigation]
+      summary: Cancel an active navigation session
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # EMERGENCY
+  /emergency/sos:
+    post:
+      operationId: sendSos
+      tags: [emergency]
+      summary: Send an SOS emergency alert
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SosInput"
+      responses:
+        "201":
+          description: SOS sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmergencyAlert"
+
+  /emergency/{id}/resolve:
+    patch:
+      operationId: resolveEmergency
+      tags: [emergency]
+      summary: Resolve an emergency alert
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmergencyAlert"
+
+  # DASHBOARD
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Get summary dashboard — manasik progress, group info, nearby places
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lat
+          in: query
+          required: false
+          schema:
+            type: number
+        - name: lng
+          in: query
+          required: false
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    SuccessResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+        message:
+          type: ["string", "null"]
+
+    # AUTH
+    RegisterInput:
+      type: object
+      required: [passportNo, fullNameAr, nationality, phone, password]
+      properties:
+        passportNo:
+          type: string
+        fullNameAr:
+          type: string
+        fullNameEn:
+          type: ["string", "null"]
+        nationality:
+          type: string
+          minLength: 2
+          maxLength: 2
+        phone:
+          type: string
+        password:
+          type: string
+          minLength: 6
+        tentZone:
+          type: ["string", "null"]
+        emergencyContact:
+          type: ["string", "null"]
+
+    LoginInput:
+      type: object
+      required: [phone, password]
+      properties:
+        phone:
+          type: string
+        password:
+          type: string
+
+    RefreshInput:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [accessToken, refreshToken, user]
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+
+    User:
+      type: object
+      required: [id, passportNo, fullNameAr, nationality, phone, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        passportNo:
+          type: string
+        fullNameAr:
+          type: string
+        fullNameEn:
+          type: ["string", "null"]
+        nationality:
+          type: string
+        phone:
+          type: string
+        tentZone:
+          type: ["string", "null"]
+        groupId:
+          type: ["string", "null"]
+          format: uuid
+        emergencyContact:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    # GROUPS
+    GroupInput:
+      type: object
+      required: [nameAr]
+      properties:
+        nameAr:
+          type: string
+        agency:
+          type: ["string", "null"]
+        maxMembers:
+          type: ["integer", "null"]
+
+    JoinGroupInput:
+      type: object
+      required: [inviteCode]
+      properties:
+        inviteCode:
+          type: string
+
+    Group:
+      type: object
+      required: [id, nameAr, inviteCode, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        nameAr:
+          type: string
+        agency:
+          type: ["string", "null"]
+        leaderId:
+          type: ["string", "null"]
+          format: uuid
+        inviteCode:
+          type: string
+        maxMembers:
+          type: integer
+        memberCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    GroupMember:
+      type: object
+      required: [id, fullNameAr, phone]
+      properties:
+        id:
+          type: string
+          format: uuid
+        fullNameAr:
+          type: string
+        fullNameEn:
+          type: ["string", "null"]
+        phone:
+          type: string
+        tentZone:
+          type: ["string", "null"]
+        lastLat:
+          type: ["number", "null"]
+        lastLng:
+          type: ["number", "null"]
+        lastSeenAt:
+          type: ["string", "null"]
+          format: date-time
+
+    # LOCATIONS
+    LocationPoint:
+      type: object
+      required: [latitude, longitude, recordedAt]
+      properties:
+        latitude:
+          type: number
+        longitude:
+          type: number
+        accuracy:
+          type: ["number", "null"]
+        zone:
+          type: ["string", "null"]
+        recordedAt:
+          type: string
+          format: date-time
+        isOfflineSync:
+          type: boolean
+
+    LocationBatch:
+      type: object
+      required: [locations]
+      properties:
+        locations:
+          type: array
+          items:
+            $ref: "#/components/schemas/LocationPoint"
+
+    SyncResult:
+      type: object
+      required: [synced]
+      properties:
+        synced:
+          type: integer
+        message:
+          type: string
+
+    MemberLocation:
+      type: object
+      required: [userId, fullNameAr, latitude, longitude, recordedAt]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        fullNameAr:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        zone:
+          type: ["string", "null"]
+        recordedAt:
+          type: string
+          format: date-time
+
+    # MANASIK
+    ManasikItem:
+      type: object
+      required: [key, titleAr, titleEn, order, status]
+      properties:
+        key:
+          type: string
+        titleAr:
+          type: string
+        titleEn:
+          type: string
+        descriptionAr:
+          type: ["string", "null"]
+        order:
+          type: integer
+        day:
+          type: ["integer", "null"]
+        status:
+          type: string
+          enum: [pending, in_progress, completed]
+        startedAt:
+          type: ["string", "null"]
+          format: date-time
+        completedAt:
+          type: ["string", "null"]
+          format: date-time
+
+    ManasikProgressUpdate:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [pending, in_progress, completed]
+
+    # PLACES
+    PlaceInput:
+      type: object
+      required: [nameAr, latitude, longitude]
+      properties:
+        nameAr:
+          type: string
+        nameEn:
+          type: ["string", "null"]
+        emoji:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        description:
+          type: ["string", "null"]
+        color:
+          type: string
+        isShared:
+          type: boolean
+        sharedWithGroup:
+          type: ["string", "null"]
+          format: uuid
+
+    PlaceUpdate:
+      type: object
+      properties:
+        nameAr:
+          type: ["string", "null"]
+        nameEn:
+          type: ["string", "null"]
+        emoji:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        color:
+          type: ["string", "null"]
+        isShared:
+          type: ["boolean", "null"]
+        sharedWithGroup:
+          type: ["string", "null"]
+          format: uuid
+
+    Place:
+      type: object
+      required: [id, userId, nameAr, emoji, latitude, longitude, color, isShared, visitCount, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        nameAr:
+          type: string
+        nameEn:
+          type: ["string", "null"]
+        emoji:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        description:
+          type: ["string", "null"]
+        color:
+          type: string
+        isShared:
+          type: boolean
+        sharedWithGroup:
+          type: ["string", "null"]
+          format: uuid
+        visitCount:
+          type: integer
+        lastVisitedAt:
+          type: ["string", "null"]
+          format: date-time
+        distanceFromUserM:
+          type: ["number", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    PlaceDetail:
+      type: object
+      required: [id, userId, nameAr, emoji, latitude, longitude, color, isShared, visitCount, createdAt, navigationHistory]
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        nameAr:
+          type: string
+        nameEn:
+          type: ["string", "null"]
+        emoji:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        description:
+          type: ["string", "null"]
+        color:
+          type: string
+        isShared:
+          type: boolean
+        visitCount:
+          type: integer
+        lastVisitedAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        navigationHistory:
+          type: array
+          items:
+            $ref: "#/components/schemas/NavigationHistoryItem"
+
+    # NAVIGATION
+    NavigationStart:
+      type: object
+      required: [destinationLat, destinationLng, destinationName]
+      properties:
+        placeId:
+          type: ["string", "null"]
+          format: uuid
+        destinationLat:
+          type: number
+        destinationLng:
+          type: number
+        destinationName:
+          type: string
+
+    NavigationSession:
+      type: object
+      required: [sessionId, destination, distanceM, bearingDegrees, directionAr, etaMinutes]
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        destination:
+          $ref: "#/components/schemas/NavDestination"
+        distanceM:
+          type: number
+        bearingDegrees:
+          type: number
+        directionAr:
+          type: string
+        etaMinutes:
+          type: integer
+
+    NavDestination:
+      type: object
+      required: [lat, lng, name]
+      properties:
+        lat:
+          type: number
+        lng:
+          type: number
+        name:
+          type: string
+        emoji:
+          type: ["string", "null"]
+
+    NavigationPosition:
+      type: object
+      required: [currentLat, currentLng]
+      properties:
+        currentLat:
+          type: number
+        currentLng:
+          type: number
+
+    NavigationUpdate:
+      type: object
+      required: [distanceRemainingM, bearingDegrees, directionAr, etaMinutes, isArrived]
+      properties:
+        distanceRemainingM:
+          type: number
+        bearingDegrees:
+          type: number
+        directionAr:
+          type: string
+        etaMinutes:
+          type: integer
+        isArrived:
+          type: boolean
+
+    NavigationComplete:
+      type: object
+      required: [walkedM, durationMinutes, messageAr]
+      properties:
+        walkedM:
+          type: number
+        durationMinutes:
+          type: number
+        messageAr:
+          type: string
+
+    NavigationHistoryItem:
+      type: object
+      required: [id, destinationName, startedAt, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        destinationName:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: ["string", "null"]
+          format: date-time
+        cancelledAt:
+          type: ["string", "null"]
+          format: date-time
+        distanceTotalM:
+          type: ["number", "null"]
+        distanceWalkedM:
+          type: ["number", "null"]
+        status:
+          type: string
+          enum: [active, completed, cancelled]
+
+    # EMERGENCY
+    SosInput:
+      type: object
+      properties:
+        latitude:
+          type: ["number", "null"]
+        longitude:
+          type: ["number", "null"]
+        alertType:
+          type: string
+
+    EmergencyAlert:
+      type: object
+      required: [id, userId, alertType, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        alertType:
+          type: string
+        latitude:
+          type: ["number", "null"]
+        longitude:
+          type: ["number", "null"]
+        status:
+          type: string
+          enum: [active, resolved]
+        createdAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: ["string", "null"]
+          format: date-time
+
+    # DASHBOARD
+    DashboardSummary:
+      type: object
+      required: [user, manasikSummary, nearbyPlaces]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        group:
+          type: ["object", "null"]
+          properties:
+            id:
+              type: string
+              format: uuid
+            nameAr:
+              type: string
+            memberCount:
+              type: integer
+            onlineCount:
+              type: integer
+        manasikSummary:
+          $ref: "#/components/schemas/ManasikSummary"
+        nearbyPlaces:
+          type: array
+          items:
+            $ref: "#/components/schemas/Place"
+        activeEmergency:
+          type: ["object", "null"]
+          properties:
+            id:
+              type: string
+              format: uuid
+            alertType:
+              type: string
+            status:
+              type: string
+
+    ManasikSummary:
+      type: object
+      required: [total, completed, inProgress, pending, percentComplete]
+      properties:
+        total:
+          type: integer
+        completed:
+          type: integer
+        inProgress:
+          type: integer
+        pending:
+          type: integer
+        percentComplete:
+          type: number

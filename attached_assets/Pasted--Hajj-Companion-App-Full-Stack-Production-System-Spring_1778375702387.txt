@@ -1,0 +1,573 @@
+# Hajj Companion App — Full-Stack Production System
+## Spring Boot 3 + Free Hosting + Personal Places Navigation (AirTag-style)
+
+You are a senior full-stack architect. Build a PRODUCTION-READY Hajj companion app using Spring Boot 3 backend with FREE hosting. The app works fully offline and syncs when online.
+
+Target: Muslim pilgrims (2M+ users during Hajj season), Arabic RTL, extreme low-connectivity (Mecca network congestion).
+
+Your role: Architect the complete system, implement all features below, suggest intelligent additions, and deliver deployment-ready code.
+
+---
+
+## 1. SYSTEM ARCHITECTURE
+
+  CLIENT LAYER (Offline-First)
+    Flutter (iOS/Android)  — SQLite + BLE + GPS
+    React PWA (Web)        — IndexedDB + Service Worker
+         |  HTTPS / WSS
+  API LAYER
+    Spring Boot 3.2        — REST + WebSocket (STOMP)
+    Spring Security        — JWT auth
+    Spring Data JPA        — Hibernate + PostgreSQL
+         |
+  DATA LAYER
+    PostgreSQL 16          — Railway.app (free 512MB)
+    Redis 7                — Upstash free tier (WebSocket pub/sub + cache)
+    Local SQLite           — All tables mirrored for 100% offline
+
+Free Hosting (recommended Railway.app):
+  - 500 hrs/month free, Postgres included, auto-deploy from GitHub
+  Alternatives: Render.com (750 hrs/month) or Fly.io (3 free VMs)
+
+---
+
+## 2. DATABASE SCHEMA (PostgreSQL)
+
+### users
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  passport_no       VARCHAR(20) UNIQUE NOT NULL
+  full_name_ar      VARCHAR(100) NOT NULL
+  full_name_en      VARCHAR(100)
+  nationality       CHAR(2) NOT NULL
+  phone             VARCHAR(20) UNIQUE NOT NULL
+  password_hash     VARCHAR(255) NOT NULL
+  tent_zone         VARCHAR(15)
+  group_id          UUID REFERENCES groups(id) ON DELETE SET NULL
+  emergency_contact VARCHAR(20)
+  qr_data           JSONB
+  created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  updated_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+### groups
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  name_ar           VARCHAR(100) NOT NULL
+  agency            VARCHAR(100)
+  leader_id         UUID REFERENCES users(id)
+  invite_code       CHAR(6) UNIQUE NOT NULL
+  max_members       INT DEFAULT 50
+  created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+### personal_places  ← NEW FEATURE
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+  name_ar           VARCHAR(100) NOT NULL     -- e.g. "فندقي", "خيمة أخي"
+  name_en           VARCHAR(100)
+  emoji             VARCHAR(10) DEFAULT '📍'  -- user-chosen icon
+  latitude          DECIMAL(10,8) NOT NULL
+  longitude         DECIMAL(11,8) NOT NULL
+  description       TEXT                      -- optional notes
+  color             VARCHAR(7) DEFAULT '#1D9E75'  -- hex color for map pin
+  is_shared         BOOLEAN DEFAULT false     -- share with group members
+  shared_with_group UUID REFERENCES groups(id)
+  visit_count       INT DEFAULT 0             -- auto-incremented when navigated to
+  last_visited_at   TIMESTAMP
+  created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  updated_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  INDEX idx_personal_places_user (user_id)
+  INDEX idx_personal_places_shared (shared_with_group) WHERE is_shared = true
+
+### navigation_sessions  ← NEW FEATURE
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+  destination_place_id UUID REFERENCES personal_places(id) ON DELETE SET NULL
+  destination_lat   DECIMAL(10,8) NOT NULL    -- stored even if place deleted
+  destination_lng   DECIMAL(11,8) NOT NULL
+  destination_name  VARCHAR(100) NOT NULL
+  started_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  completed_at      TIMESTAMP                 -- null if still navigating
+  cancelled_at      TIMESTAMP
+  distance_total_m  FLOAT                     -- total distance at start
+  distance_walked_m FLOAT DEFAULT 0           -- updated during nav
+  -- INDEX on (user_id, started_at DESC)
+
+### location_history
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+  latitude          DECIMAL(10,8) NOT NULL
+  longitude         DECIMAL(11,8) NOT NULL
+  accuracy          FLOAT
+  zone              VARCHAR(30)
+  is_offline_sync   BOOLEAN DEFAULT false
+  recorded_at       TIMESTAMP NOT NULL
+  synced_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  INDEX idx_location_user_time (user_id, recorded_at DESC)
+
+### manasik_progress
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+  mansak_key        VARCHAR(30) NOT NULL
+  status            VARCHAR(15) DEFAULT 'pending'
+  started_at        TIMESTAMP
+  completed_at      TIMESTAMP
+  UNIQUE (user_id, mansak_key)
+
+### emergency_alerts
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  user_id           UUID NOT NULL REFERENCES users(id)
+  alert_type        VARCHAR(20) DEFAULT 'sos'
+  latitude          DECIMAL(10,8)
+  longitude         DECIMAL(11,8)
+  status            VARCHAR(15) DEFAULT 'active'
+  created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  resolved_at       TIMESTAMP
+
+---
+
+## 3. SPRING BOOT PROJECT STRUCTURE
+
+  src/main/java/com/hajj/
+  ├── config/
+  │   ├── SecurityConfig.java
+  │   ├── WebSocketConfig.java
+  │   └── RedisConfig.java
+  ├── controller/
+  │   ├── AuthController.java
+  │   ├── GroupController.java
+  │   ├── LocationController.java
+  │   ├── ManasikController.java
+  │   ├── EmergencyController.java
+  │   └── PersonalPlaceController.java    ← NEW
+  ├── model/
+  │   ├── entity/
+  │   │   ├── User.java
+  │   │   ├── Group.java
+  │   │   ├── PersonalPlace.java          ← NEW
+  │   │   ├── NavigationSession.java      ← NEW
+  │   │   ├── LocationHistory.java
+  │   │   ├── ManasikProgress.java
+  │   │   └── EmergencyAlert.java
+  │   └── dto/
+  │       ├── PersonalPlaceDto.java       ← NEW
+  │       ├── NavigationStartDto.java     ← NEW
+  │       └── NavigationStatusDto.java    ← NEW
+  ├── repository/
+  │   ├── PersonalPlaceRepository.java    ← NEW
+  │   └── NavigationSessionRepository.java ← NEW
+  ├── service/
+  │   ├── AuthService.java
+  │   ├── LocationService.java
+  │   ├── PersonalPlaceService.java       ← NEW
+  │   ├── NavigationService.java          ← NEW
+  │   ├── ManasikService.java
+  │   └── EmergencyService.java
+  └── HajjApplication.java
+
+---
+
+## 4. REST API — PERSONAL PLACES (NEW FEATURE)
+
+### Personal Places CRUD
+  POST   /places
+    Request:
+      {
+        "name_ar": "فندقي",
+        "name_en": "My Hotel",
+        "emoji": "🏨",
+        "latitude": 21.4225,
+        "longitude": 39.8262,
+        "description": "الطابق 3، غرفة 312",
+        "color": "#1D9E75",
+        "is_shared": false
+      }
+    Response: { id, name_ar, emoji, latitude, longitude, ... }
+
+  GET    /places
+    Response: [ { id, name_ar, emoji, lat, lng, distance_from_user_m, is_shared, visit_count } ]
+    -- distance_from_user_m calculated server-side if user sends ?lat=&lng=
+    -- or calculated client-side offline using Haversine
+
+  GET    /places/{id}
+    Response: { ...place, last_visited_at, navigation_history: [...] }
+
+  PUT    /places/{id}
+    Request:  { name_ar?, emoji?, description?, color?, is_shared? }
+
+  DELETE /places/{id}
+
+  GET    /places/group/{groupId}
+    Response: [ shared places from all group members ]
+    -- Only places where is_shared=true and shared_with_group=groupId
+
+### Navigation (NEW FEATURE)
+  POST   /navigation/start
+    Request:
+      {
+        "place_id": "uuid",           -- optional if navigating to ad-hoc coords
+        "destination_lat": 21.4225,   -- used if no place_id
+        "destination_lng": 39.8262,
+        "destination_name": "فندقي"
+      }
+    Response:
+      {
+        "session_id": "uuid",
+        "destination": { lat, lng, name_ar, emoji },
+        "distance_m": 847.3,
+        "bearing_degrees": 267.5,     -- compass direction (0=N, 90=E, 180=S, 270=W)
+        "direction_ar": "اتجه غرباً", -- human-readable Arabic direction
+        "eta_minutes": 11             -- estimated walk time (avg 80m/min)
+      }
+
+  POST   /navigation/{sessionId}/update
+    Request:  { current_lat, current_lng }
+    Response:
+      {
+        "distance_remaining_m": 412.7,
+        "bearing_degrees": 271.2,
+        "direction_ar": "استمر غرباً",
+        "eta_minutes": 5,
+        "is_arrived": false           -- true when distance < 30m
+      }
+
+  POST   /navigation/{sessionId}/complete
+    Response: { walked_m, duration_minutes, message_ar: "وصلت إلى فندقي 🎉" }
+
+  POST   /navigation/{sessionId}/cancel
+
+  GET    /navigation/history
+    Response: [ { destination_name, started_at, distance_total_m, status } ]
+
+---
+
+## 5. FLUTTER — PERSONAL PLACES FEATURE
+
+### New Screens to Add:
+  lib/screens/
+  ├── places/
+  │   ├── places_list_screen.dart      -- list of saved places with distance
+  │   ├── add_place_screen.dart        -- form + map picker to drop pin
+  │   └── place_detail_screen.dart     -- place info + navigate button
+  └── navigation/
+      └── compass_navigation_screen.dart  -- AirTag-style compass + distance
+
+### Personal Places List Screen (places_list_screen.dart)
+  UI elements:
+  - Header: "مواقعي المحفوظة" + FAB to add new
+  - Each place card shows:
+      * Emoji + colored pin + Arabic name
+      * Distance from current position (Haversine, real-time update)
+      * "ابدأ الملاحة" button → navigates to CompassNavigationScreen
+      * Long press → edit / delete / share with group
+  - Filter tabs: "الكل" | "خاصة" | "مشتركة مع المجموعة"
+  - Empty state: illustration + "أضف موقعك الأول (فندق، خيمة، ...)"
+
+### Add Place Screen (add_place_screen.dart)
+  Steps:
+  1. Map view (flutter_map) centered on current GPS location
+     - Draggable pin to select exact location
+     - "استخدم موقعي الحالي" quick button
+  2. Form:
+     - Name field (Arabic keyboard auto-shown)
+     - Emoji picker (grid of relevant emojis: 🏨🕌⛺🏥🍽️🚌🛍️📍🏁)
+     - Color picker (6 preset colors)
+     - Description (optional notes)
+     - Toggle "شارك مع مجموعتي"
+  3. Save → POST /places → add to local SQLite immediately (offline-safe)
+
+### Compass Navigation Screen (compass_navigation_screen.dart)  ← CORE UI
+  This is the AirTag-style navigation screen. Implement it with:
+
+  TOP HALF — Visual compass:
+    - Large circular compass widget (custom painter)
+    - Rotating arrow pointing toward destination
+    - Arrow rotates based on: bearing_to_destination - device_heading
+    - Device heading from: flutter_compass package (device magnetometer)
+    - If device has no compass: show static arrow with bearing degrees only
+
+  CENTER — Distance display:
+    - Large bold number showing remaining distance
+    - Adaptive units:
+        > 1000m → show in km (e.g. "1.2 كم")
+        100-999m → "847 م"
+        < 100m → "47 م" with pulsing green glow
+        < 30m → show "وصلت! 🎉" with haptic feedback + celebration animation
+
+  BOTTOM — Destination info panel:
+    - Destination emoji + name in Arabic
+    - ETA: "~11 دقيقة مشياً"
+    - Mini map (small flutter_map widget, 150px height):
+        * Shows user position (blue pulsing dot)
+        * Shows destination pin (colored emoji pin)
+        * Straight line between them
+        * Map auto-follows user as they move
+    - "إلغاء الملاحة" button
+
+  Implementation notes:
+    - GPS updates every 3 seconds (LocationService stream)
+    - Bearing calculated client-side with Haversine (NO internet needed)
+    - Heading from compass sensor OR fallback to GPS track direction
+    - Vibration when distance changes zone (>500m → <500m → <100m → arrived)
+    - Screen stays on (WakeLock) during navigation
+
+### Navigation Logic (navigation_service.dart)
+  // Calculate bearing between two GPS points (offline, pure math)
+  double calculateBearing(double lat1, double lng1, double lat2, double lng2) {
+    final dLng = (lng2 - lng1) * pi / 180;
+    final lat1Rad = lat1 * pi / 180;
+    final lat2Rad = lat2 * pi / 180;
+    final y = sin(dLng) * cos(lat2Rad);
+    final x = cos(lat1Rad) * sin(lat2Rad) - sin(lat1Rad) * cos(lat2Rad) * cos(dLng);
+    return (atan2(y, x) * 180 / pi + 360) % 360; // 0-360 degrees
+  }
+
+  // Convert bearing to Arabic direction
+  String bearingToArabic(double bearing) {
+    if (bearing < 22.5 || bearing >= 337.5) return 'اتجه شمالاً ↑';
+    if (bearing < 67.5)  return 'اتجه شمال شرقاً ↗';
+    if (bearing < 112.5) return 'اتجه شرقاً →';
+    if (bearing < 157.5) return 'اتجه جنوب شرقاً ↘';
+    if (bearing < 202.5) return 'اتجه جنوباً ↓';
+    if (bearing < 247.5) return 'اتجه جنوب غرباً ↙';
+    if (bearing < 292.5) return 'اتجه غرباً ←';
+    return 'اتجه شمال غرباً ↖';
+  }
+
+  // ETA calculation
+  int etaMinutes(double distanceMeters) {
+    const walkingSpeedMs = 1.1; // avg pilgrim walking speed m/s (slower than normal)
+    return (distanceMeters / walkingSpeedMs / 60).ceil();
+  }
+
+---
+
+## 6. REACT PWA — PERSONAL PLACES
+
+### New Routes:
+  /places            — list of saved places
+  /places/new        — add new place (map picker)
+  /places/:id        — place detail
+  /navigate/:id      — compass navigation view
+
+### Navigation Screen (Web Version)
+  Since web has no device compass API in all browsers, implement 2 modes:
+  Mode A (if DeviceOrientationEvent available):
+    - Full compass with rotating arrow (same as Flutter)
+  Mode B (fallback):
+    - Large arrow SVG that rotates based on GPS track direction
+    - Text: "اتجه شمالاً ↑ — 847 م — ~11 دقيقة"
+    - Mini map with straight line to destination
+
+  Use navigator.geolocation.watchPosition() for real-time GPS updates.
+
+---
+
+## 7. OFFLINE HANDLING FOR PERSONAL PLACES
+
+  Personal places are stored locally in SQLite (Flutter) / IndexedDB (Web).
+  Sync strategy:
+    - CREATE: write to local DB immediately, queue POST /places for sync
+    - UPDATE: same — local first, queue PUT /places/{id}
+    - DELETE: local delete immediately, queue DELETE /places/{id}
+    - NAVIGATION: 100% offline — all math done on device (Haversine + bearing)
+    - No internet required at any point for navigation!
+
+  Local SQLite table (mirrors server):
+    CREATE TABLE personal_places (
+      id TEXT PRIMARY KEY,
+      name_ar TEXT NOT NULL,
+      name_en TEXT,
+      emoji TEXT DEFAULT '📍',
+      latitude REAL NOT NULL,
+      longitude REAL NOT NULL,
+      description TEXT,
+      color TEXT DEFAULT '#1D9E75',
+      is_shared INTEGER DEFAULT 0,
+      visit_count INTEGER DEFAULT 0,
+      last_visited_at INTEGER,   -- unix timestamp
+      created_at INTEGER,
+      sync_status TEXT DEFAULT 'pending'  -- pending | synced | conflict
+    );
+
+---
+
+## 8. UX FLOW — HOW THE FEATURE WORKS (End-to-End)
+
+  SAVING A PLACE:
+  1. User arrives at hotel → opens app → taps "+" in Places tab
+  2. Map appears centered on their GPS position
+  3. They drag pin to exact hotel entrance
+  4. Type "فندقي" → pick 🏨 emoji → pick green color → Save
+  5. Place saved locally (offline) + synced to server when online
+  6. Appears in their list with "0 م" distance (they're there now)
+
+  NAVIGATING BACK:
+  1. User is in Mina, wants to return to hotel
+  2. Opens "مواقعي" tab → sees "فندقي 🏨 — 2.3 كم"
+  3. Taps "ابدأ الملاحة"
+  4. Compass screen opens:
+      - Large arrow pointing toward hotel (updates every 3s)
+      - "2.3 كم — ~29 دقيقة مشياً"
+      - Mini map showing their position moving toward the hotel pin
+  5. As they walk: distance updates in real-time
+  6. At 100m: arrow glows green, "اقتربت! 100 م"
+  7. At 30m: "وصلت إلى فندقي! 🎉" + vibration
+
+---
+
+## 9. ALL REST ENDPOINTS (COMPLETE LIST)
+
+  AUTH:
+    POST /auth/register
+    POST /auth/login
+    POST /auth/refresh
+    GET  /auth/me
+
+  GROUPS:
+    POST /groups
+    GET  /groups/{id}
+    POST /groups/join          { invite_code }
+    GET  /groups/{id}/members
+
+  LOCATION:
+    POST /locations/sync       [ { lat, lng, accuracy, zone, recorded_at } ]
+    GET  /locations/group/{groupId}/live
+    WS   /ws/location          STOMP — subscribe /topic/group/{groupId}
+
+  MANASIK:
+    GET  /manasik
+    PATCH /manasik/{key}/progress   { status }
+
+  PERSONAL PLACES:
+    POST   /places
+    GET    /places                  ?lat=&lng= (for distance sorting)
+    GET    /places/{id}
+    PUT    /places/{id}
+    DELETE /places/{id}
+    GET    /places/group/{groupId}  -- shared places
+
+  NAVIGATION:
+    POST  /navigation/start         { place_id?, destination_lat, destination_lng, destination_name }
+    POST  /navigation/{id}/update   { current_lat, current_lng }
+    POST  /navigation/{id}/complete
+    POST  /navigation/{id}/cancel
+    GET   /navigation/history
+
+  EMERGENCY:
+    POST  /emergency/sos
+    PATCH /emergency/{id}/resolve
+
+---
+
+## 10. FLUTTER DEPENDENCIES (pubspec.yaml)
+
+  dependencies:
+    flutter:
+      sdk: flutter
+    # State management
+    flutter_riverpod: ^2.5.1
+    # Maps (offline support)
+    flutter_map: ^6.1.0
+    # GPS
+    geolocator: ^12.0.0
+    # Compass sensor for navigation arrow
+    flutter_compass: ^0.8.0
+    # BLE group tracking
+    flutter_blue_plus: ^1.32.0
+    # Local database
+    sqflite: ^2.3.3
+    path_provider: ^2.1.3
+    # Prayer times (offline calculation)
+    adhan: ^1.1.1
+    # QR code
+    qr_flutter: ^4.1.0
+    # HTTP
+    dio: ^5.4.3
+    # WebSocket (STOMP)
+    stomp_dart_client: ^1.4.0
+    # Keep screen on during navigation
+    wakelock_plus: ^1.2.5
+    # Haptic feedback on arrival
+    vibration: ^1.8.4
+    # Smooth animations
+    flutter_animate: ^4.5.0
+
+---
+
+## 11. TECH STACK SUMMARY
+
+  Backend:    Spring Boot 3.2, Spring Security (JWT), Spring WebSocket (STOMP), JPA/Hibernate
+  Database:   PostgreSQL 16 on Railway.app (free 512MB)
+  Cache/RT:   Redis 7 on Upstash (free tier) — WebSocket pub/sub
+  Mobile:     Flutter 3.x + Riverpod + sqflite + flutter_map + flutter_compass
+  Web:        React 18 + Vite + Zustand + Workbox + IndexedDB
+  Hosting:    Railway.app (500 hrs/month free) — auto-deploy from GitHub
+  Auth:       JWT — access 15min + refresh 30 days
+  Maps:       OpenStreetMap + MBTiles bundle (offline)
+  Navigation: 100% offline — Haversine + Bearing math on device
+
+---
+
+## 12. DELIVERABLES — Generate All Files
+
+  1. Spring Boot app (complete):
+     - PersonalPlace.java entity + PersonalPlaceRepository.java
+     - NavigationSession.java entity + NavigationSessionRepository.java
+     - PersonalPlaceController.java (all CRUD endpoints)
+     - NavigationController.java (start/update/complete/cancel)
+     - PersonalPlaceService.java + NavigationService.java
+     - All DTOs with @Valid annotations
+     - All other controllers: Auth, Group, Location, Manasik, Emergency
+
+  2. Database migrations (Flyway):
+     - V1__initial_schema.sql
+     - V2__personal_places.sql
+     - V3__seed_manasik.sql
+
+  3. Flutter app:
+     - main.dart (5 tabs: Home, Manasik, Places, Map, Profile)
+     - places_list_screen.dart + add_place_screen.dart
+     - compass_navigation_screen.dart (AirTag-style)
+     - navigation_service.dart (Haversine + Bearing)
+     - personal_place_service.dart (CRUD + offline sync)
+     - All existing screens: HomeScreen, ManasikScreen, MapScreen, ProfileScreen
+
+  4. React PWA:
+     - /places route with list + add flow
+     - /navigate/:id with compass/arrow navigation
+     - IndexedDB layer for places offline storage
+
+  5. Docker Compose (local dev):
+     - Spring Boot + PostgreSQL + Redis
+
+  6. README-DEPLOY.md:
+     - Railway.app step-by-step (5 minutes to deploy)
+     - Environment variables list
+
+---
+
+## 13. AI SUGGESTIONS REQUESTED
+
+After implementing the above, suggest 2-3 additional smart features and implement the most valuable:
+
+Context: 2M pilgrims, extreme crowds, elderly users, emotional journey, language barriers.
+
+Consider specifically:
+  - How can personal places help during emergencies?
+  - Could "popular places" be crowd-sourced from group members?
+  - Smart suggestion: "يبدو أنك في منطقة الفنادق، هل تريد حفظ موقعك الآن؟"
+
+---
+
+## 14. CODE QUALITY
+
+  - Arabic RTL everywhere: direction: rtl, TextDirection.rtl
+  - All endpoints: @Valid input, typed responses, proper HTTP status codes
+  - SQL: parameterized queries only
+  - Navigation math: 100% offline (no external API)
+  - GPS battery optimization: 3s updates during active navigation, 30s background
+  - Error messages in Arabic (messages_ar.properties)
+  - Offline sync: idempotent, safe to replay
+
+Begin with: Spring Boot backend (entities → repos → services → controllers).
+Then: Flutter (focus on compass_navigation_screen.dart and places screens).
+Then: React PWA navigation view.
+Then: Deployment guide.
