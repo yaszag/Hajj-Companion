@@ -35,7 +35,14 @@ export default function PlacesPage() {
       }
     }, {
       onSuccess: (data) => {
-        setLocation(`/navigate/${data.sessionId}`);
+        const dest = data.destination;
+        const params = new URLSearchParams({
+          lat: String(dest.lat),
+          lng: String(dest.lng),
+          name: dest.name,
+          ...(dest.emoji ? { emoji: dest.emoji } : {}),
+        });
+        setLocation(`/navigate/${data.sessionId}?${params.toString()}`);
       }
     });
   };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { useLocation, useParams } from "wouter";
+import { useLocation, useParams, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useUpdateNavigation, useCancelNavigation } from "@workspace/api-client-react";
 import { X, Navigation, MapPin, Compass } from "lucide-react";
@@ -11,10 +11,20 @@ export default function NavigatePage() {
   const params = useParams();
   const sessionId = params.sessionId;
   const [, setLocation] = useLocation();
+  const searchString = useSearch();
   const { toast } = useToast();
 
+  // Parse destination from URL query params (set by places.tsx when navigation starts)
+  const searchParams = new URLSearchParams(searchString);
+  const destLat = parseFloat(searchParams.get("lat") ?? "");
+  const destLng = parseFloat(searchParams.get("lng") ?? "");
+  const destName = searchParams.get("name") ?? "";
+  const urlDestination = !isNaN(destLat) && !isNaN(destLng) && destName
+    ? { lat: destLat, lng: destLng, name: destName }
+    : null;
+
   const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [destination, setDestination] = useState<{ lat: number; lng: number; name: string } | null>(null);
+  const [destination, setDestination] = useState<{ lat: number; lng: number; name: string } | null>(urlDestination);
   const [distance, setDistance] = useState<number | null>(null);
   const [bearing, setBearing] = useState<number | null>(null);
   const [deviceHeading, setDeviceHeading] = useState<number | null>(null);
@@ -89,12 +99,12 @@ export default function NavigatePage() {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [destination, sessionId]);
 
-  // Default destination (Kaaba — placeholder until session API provides it)
+  // Sync destination if URL params change (e.g. on first render)
   useEffect(() => {
-    if (!destination) {
-      setDestination({ lat: 21.4225, lng: 39.8262, name: "المسجد الحرام" });
+    if (!destination && urlDestination) {
+      setDestination(urlDestination);
     }
-  }, []);
+  }, [urlDestination?.lat, urlDestination?.lng]);
 
   const handleCancel = () => {
     if (sessionId) {
