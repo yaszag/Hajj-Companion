@@ -1,0 +1,7 @@
+{
+  "buildCommand": "cd ../../ && pnpm run build",
+  "outputDirectory": "dist/public",
+  "installCommand": "cd ../../ && pnpm install",
+  "framework": "vite",
+  "rootDirectory": "artifacts/hajj-companion"
+}
