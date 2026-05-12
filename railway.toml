@@ -1,18 +1,7 @@
-# Railway.app Configuration
-# Deployments: https://railway.app
-
 [build]
-# Use the Dockerfile for building
-dockerfile = "./Dockerfile"
-
+builder = "nixpacks"
+buildCommand = "pnpm install && pnpm --filter @workspace/api-server run build"
 [deploy]
-# Start the production application
-startCommand = "node --enable-source-maps ./dist/index.mjs"
-
-# Health check endpoint
-healthcheckPath = "/health"
-healthcheckTimeout = 100
-
-# Railway environment variables required
-# DATABASE_URL - Set in Railway dashboard
-# PORT - Automatically set by Railway (default 8080)
+startCommand = "node --enable-source-maps ./artifacts/api-server/dist/index.mjs"
+healthcheckPath = "/api/healthz"
+restartPolicyType = "on_failure"
