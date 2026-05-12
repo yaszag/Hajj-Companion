@@ -1,7 +1,12 @@
 [build]
 builder = "Railpack"
 buildCommand = "pnpm install && pnpm --filter @workspace/api-server run build"
+
 [deploy]
 startCommand = "node --enable-source-maps ./artifacts/api-server/dist/index.mjs"
+preDeployCommand = "pnpm --filter @workspace/db run push"
 healthcheckPath = "/api/healthz"
 restartPolicyType = "on_failure"
+
+[variables]
+DATABASE_URL = "${{Postgres.DATABASE_URL}}"
