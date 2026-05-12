@@ -47,3 +47,18 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Environment variables (local only)
+.env
+.env.local
+.env.*.local
+!.env.example
+!*.env.example
+
+# Build artifacts
+dist/
+build/
+
+# OS
+.DS_Store
+.env.prod

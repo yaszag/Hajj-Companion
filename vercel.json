@@ -1,0 +1,54 @@
+{
+  "version": 2,
+  "buildCommand": "pnpm run build --filter @workspace/hajj-companion",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "outputDirectory": "artifacts/hajj-companion/dist/public",
+  "framework": "vite",
+  "regions": ["iad1"],
+  "env": {
+    "VITE_API_BASE_URL": {
+      "required": true,
+      "description": "Base URL for API server (e.g., https://your-railway-api.railway.app)"
+    },
+    "PORT": {
+      "default": "3000",
+      "description": "Port for Vite server (overridden by Vercel)"
+    },
+    "BASE_PATH": {
+      "default": "/",
+      "description": "Public base path for the application"
+    }
+  },
+  "git": {
+    "deploymentEnabled": {
+      "main": true,
+      "develop": false
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    }
+  ]
+}
