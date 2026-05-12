@@ -37,6 +37,7 @@ minimumReleaseAge: 1440
 
 minimumReleaseAgeExclude:
   - '@replit/*'
+  - '@tanstack/*'
   - stripe-replit-sync
 
 onlyBuiltDependencies:
