@@ -1,6 +1,11 @@
 {
-  "buildCommand": "pnpm install && pnpm --filter @workspace/hajj-companion run build",
+  "buildCommand": "pnpm --filter @workspace/hajj-companion run build",
   "outputDirectory": "artifacts/hajj-companion/dist",
   "installCommand": "pnpm install",
-  "framework": null
+  "framework": null,
+  "build": {
+    "env": {
+      "NODE_VERSION": "20"
+    }
+  }
 }
