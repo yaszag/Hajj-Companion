@@ -42,7 +42,7 @@ export default function AuthPage() {
       data: { phone: loginPhone, password: loginPassword }
     }, {
       onSuccess: (data) => {
-        login(data.accessToken, data.user);
+        login(data.accessToken, data.user, data.refreshToken);
         toast({ title: "تم تسجيل الدخول بنجاح" });
         setLocation("/");
       },
@@ -73,7 +73,7 @@ export default function AuthPage() {
       }
     }, {
       onSuccess: (data) => {
-        login(data.accessToken, data.user);
+        login(data.accessToken, data.user, data.refreshToken);
         toast({ title: "تم إنشاء الحساب بنجاح" });
         setLocation("/");
       },

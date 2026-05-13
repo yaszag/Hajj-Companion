@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { SessionExpiredBridge } from "@/components/SessionExpiredBridge";
 
 // Pages
 import Dashboard from "@/pages/dashboard";
@@ -26,6 +27,7 @@ function AppRouter() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
+      <Route path="/login" component={AuthPage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/manasik" component={ManasikPage} />
       <Route path="/places" component={PlacesPage} />
@@ -49,6 +51,7 @@ function App() {
       <TooltipProvider>
         <AuthProvider>
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <SessionExpiredBridge />
             <AppRouter />
           </WouterRouter>
           <Toaster />

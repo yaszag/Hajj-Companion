@@ -1,25 +1,71 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { User } from "@workspace/api-client-react";
 import { setupApiClient } from "../lib/api";
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  login: (token: string, user: User) => void;
+  login: (accessToken: string, user: User, refreshToken?: string) => void;
   logout: () => void;
   isAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function migrateLegacyAccessToken(): void {
+  try {
+    const legacy = localStorage.getItem("hajj_access_token");
+    if (legacy && !localStorage.getItem("accessToken")) {
+      localStorage.setItem("accessToken", legacy);
+      localStorage.removeItem("hajj_access_token");
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const logout = useCallback(() => {
+    try {
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
+      localStorage.removeItem("hajj_user");
+      localStorage.removeItem("hajj_access_token");
+    } catch {
+      /* ignore */
+    }
+    setToken(null);
+    setUser(null);
+  }, []);
+
+  const login = useCallback((newAccessToken: string, newUser: User, newRefreshToken?: string) => {
+    try {
+      localStorage.setItem("accessToken", newAccessToken);
+      if (newRefreshToken !== undefined) {
+        localStorage.setItem("refreshToken", newRefreshToken);
+      }
+      localStorage.setItem("hajj_user", JSON.stringify(newUser));
+    } catch {
+      /* ignore */
+    }
+    setToken(newAccessToken);
+    setUser(newUser);
+  }, []);
+
   useEffect(() => {
-    const storedToken = localStorage.getItem("hajj_access_token");
-    const storedUser = localStorage.getItem("hajj_user");
+    migrateLegacyAccessToken();
+    let storedToken: string | null = null;
+    let storedUser: string | null = null;
+    try {
+      storedToken = localStorage.getItem("accessToken");
+      storedUser = localStorage.getItem("hajj_user");
+    } catch {
+      /* ignore */
+    }
 
     if (storedToken && storedUser) {
       setToken(storedToken);
@@ -29,26 +75,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error("Failed to parse user from local storage", e);
       }
     }
-    
-    // Initialize the API client with the auth token getter
-    setupApiClient();
-    
+
+    setupApiClient((newAccess) => {
+      setToken(newAccess);
+    });
+
     setIsLoading(false);
   }, []);
-
-  const login = (newToken: string, newUser: User) => {
-    localStorage.setItem("hajj_access_token", newToken);
-    localStorage.setItem("hajj_user", JSON.stringify(newUser));
-    setToken(newToken);
-    setUser(newUser);
-  };
-
-  const logout = () => {
-    localStorage.removeItem("hajj_access_token");
-    localStorage.removeItem("hajj_user");
-    setToken(null);
-    setUser(null);
-  };
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center bg-background"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>;

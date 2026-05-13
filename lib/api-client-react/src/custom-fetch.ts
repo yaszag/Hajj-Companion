@@ -17,6 +17,44 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
 let _baseUrl: string | null = null;
 let _authTokenGetter: AuthTokenGetter | null = null;
+let _onSessionExpired: (() => void) | null = null;
+let _onAccessTokenRefreshed: ((accessToken: string) => void) | null = null;
+
+let _refreshInFlight: Promise<string | null> | null = null;
+
+const ACCESS_STORAGE_KEY = "accessToken";
+const REFRESH_STORAGE_KEY = "refreshToken";
+
+function lsGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function lsSet(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Called when refresh fails or no refresh token exists after a 401 on an API call.
+ * Use for clearing client auth state and redirecting to login (register once from the app).
+ */
+export function setSessionExpiredHandler(handler: (() => void) | null): void {
+  _onSessionExpired = handler;
+}
+
+/**
+ * Optional: keep client auth state in sync when the access token is renewed via refresh.
+ */
+export function setAccessTokenRefreshedHandler(handler: ((accessToken: string) => void) | null): void {
+  _onAccessTokenRefreshed = handler;
+}
 
 /**
  * Set a base URL that is prepended to every relative request URL
@@ -76,6 +114,81 @@ function resolveUrl(input: RequestInfo | URL): string {
   if (typeof input === "string") return input;
   if (isUrl(input)) return input.toString();
   return input.url;
+}
+
+function requestPath(url: string): string {
+  try {
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      return new URL(url).pathname;
+    }
+  } catch {
+    /* ignore */
+  }
+  const q = url.indexOf("?");
+  return q === -1 ? url : url.slice(0, q);
+}
+
+function shouldAttemptRefreshAfter401(url: string): boolean {
+  const path = requestPath(url);
+  return (
+    !path.endsWith("/auth/login") &&
+    !path.endsWith("/auth/register") &&
+    !path.endsWith("/auth/refresh")
+  );
+}
+
+function refreshEndpoint(): string {
+  const path = "/auth/refresh";
+  return _baseUrl != null ? `${_baseUrl}${path}` : path;
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (_refreshInFlight) {
+    return _refreshInFlight;
+  }
+
+  _refreshInFlight = (async (): Promise<string | null> => {
+    const refreshToken = lsGet(REFRESH_STORAGE_KEY);
+    if (!refreshToken) {
+      _onSessionExpired?.();
+      return null;
+    }
+
+    try {
+      const res = await fetch(refreshEndpoint(), {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: DEFAULT_JSON_ACCEPT },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!res.ok) {
+        _onSessionExpired?.();
+        return null;
+      }
+
+      const data = (await res.json()) as { accessToken?: string; refreshToken?: string };
+      if (typeof data.accessToken !== "string" || data.accessToken === "") {
+        _onSessionExpired?.();
+        return null;
+      }
+
+      lsSet(ACCESS_STORAGE_KEY, data.accessToken);
+      if (typeof data.refreshToken === "string" && data.refreshToken !== "") {
+        lsSet(REFRESH_STORAGE_KEY, data.refreshToken);
+      }
+
+      _onAccessTokenRefreshed?.(data.accessToken);
+
+      return data.accessToken;
+    } catch {
+      _onSessionExpired?.();
+      return null;
+    }
+  })().finally(() => {
+    _refreshInFlight = null;
+  });
+
+  return _refreshInFlight;
 }
 
 function mergeHeaders(...sources: Array<HeadersInit | undefined>): Headers {
@@ -335,37 +448,55 @@ export async function customFetch<T = unknown>(
     throw new TypeError(`customFetch: ${method} requests cannot have a body.`);
   }
 
-  const headers = mergeHeaders(isRequest(input) ? input.headers : undefined, headersInit);
-
-  if (
-    typeof init.body === "string" &&
-    !headers.has("content-type") &&
-    looksLikeJson(init.body)
-  ) {
-    headers.set("content-type", "application/json");
-  }
-
-  if (responseType === "json" && !headers.has("accept")) {
-    headers.set("accept", DEFAULT_JSON_ACCEPT);
-  }
-
-  // Attach bearer token when an auth getter is configured and no
-  // Authorization header has been explicitly provided.
-  if (_authTokenGetter && !headers.has("authorization")) {
-    const token = await _authTokenGetter();
-    if (token) {
-      headers.set("authorization", `Bearer ${token}`);
-    }
-  }
-
   const requestInfo = { method, url: resolveUrl(input) };
+  let forcedAccessToken: string | undefined;
 
-  const response = await fetch(input, { ...init, method, headers });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const headers = mergeHeaders(isRequest(input) ? input.headers : undefined, headersInit);
 
-  if (!response.ok) {
-    const errorData = await parseErrorBody(response, method);
-    throw new ApiError(response, errorData, requestInfo);
+    if (
+      typeof init.body === "string" &&
+      !headers.has("content-type") &&
+      looksLikeJson(init.body)
+    ) {
+      headers.set("content-type", "application/json");
+    }
+
+    if (responseType === "json" && !headers.has("accept")) {
+      headers.set("accept", DEFAULT_JSON_ACCEPT);
+    }
+
+    const hadAuthorizationBeforeGetter = headers.has("authorization");
+
+    if (_authTokenGetter && !hadAuthorizationBeforeGetter) {
+      const token = forcedAccessToken ?? (await _authTokenGetter());
+      if (token) {
+        headers.set("authorization", `Bearer ${token}`);
+      }
+    }
+
+    const response = await fetch(input, { ...init, method, headers });
+
+    if (
+      response.status === 401 &&
+      attempt === 0 &&
+      !hadAuthorizationBeforeGetter &&
+      shouldAttemptRefreshAfter401(requestInfo.url)
+    ) {
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        forcedAccessToken = newToken;
+        continue;
+      }
+    }
+
+    if (!response.ok) {
+      const errorData = await parseErrorBody(response, method);
+      throw new ApiError(response, errorData, requestInfo);
+    }
+
+    return (await parseSuccessBody(response, responseType, requestInfo)) as T;
   }
 
-  return (await parseSuccessBody(response, responseType, requestInfo)) as T;
+  throw new TypeError("customFetch: unexpected retry exhaustion");
 }

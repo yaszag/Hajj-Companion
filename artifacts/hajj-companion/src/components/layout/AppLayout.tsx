@@ -15,7 +15,7 @@ export function AppLayout({ children, title, hideNav = false, hideHeader = false
   const { isAuthenticated } = useAuth();
 
   if (!isAuthenticated) {
-    return <Redirect to="/auth" />;
+    return <Redirect to="/login" />;
   }
 
   return (
