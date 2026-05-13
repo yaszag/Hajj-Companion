@@ -1,11 +1,12 @@
 {
   "buildCommand": "pnpm --filter @workspace/hajj-companion run build",
-   "outputDirectory": "artifacts/hajj-companion/dist/public",
+  "outputDirectory": "artifacts/hajj-companion/dist/public",
   "installCommand": "pnpm install",
   "framework": null,
-  "build": {
-    "env": {
-      "NODE_VERSION": "20"
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
-  }
+  ]
 }
