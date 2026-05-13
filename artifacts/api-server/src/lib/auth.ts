@@ -3,7 +3,7 @@ import type { Request, Response, NextFunction } from "express";
 
 const ACCESS_SECRET = process.env["SESSION_SECRET"] ?? "hajj-access-secret";
 const REFRESH_SECRET = (process.env["SESSION_SECRET"] ?? "hajj-refresh-secret") + "-refresh";
-const ACCESS_EXPIRES = "5m";
+const ACCESS_EXPIRES = "24h"; // 24 hours
 const REFRESH_EXPIRES = "30d";
 
 export interface TokenPayload {
