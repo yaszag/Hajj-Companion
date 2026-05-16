@@ -1,7 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import { eq, or } from "drizzle-orm";
-import { db, usersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
+import { db, usersTable, groupsTable } from "@workspace/db";
 import {
   RegisterBody,
   LoginBody,
@@ -16,43 +17,166 @@ import {
 
 const router = Router();
 
+function generateInviteCode(): string {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+function generatePlaceholderPassport(): string {
+  // Must fit users.passport_no varchar(20)
+  const hex = randomUUID().replace(/-/g, "");
+  return `NP-${hex.slice(0, 17)}`;
+}
+
 router.post("/auth/register", async (req, res): Promise<void> => {
   const parsed = RegisterBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { passportNo, fullNameAr, fullNameEn, nationality, phone, password, tentZone, emergencyContact } = parsed.data;
 
-  const existing = await db
-    .select({ id: usersTable.id })
-    .from(usersTable)
-    .where(or(eq(usersTable.phone, phone), eq(usersTable.passportNo, passportNo)))
-    .limit(1);
+  const {
+    firstName,
+    lastName,
+    nationality,
+    phone,
+    password,
+    hotelName,
+    groupName,
+    passportNo: passportNoRaw,
+    fullNameAr: fullNameArRaw,
+    fullNameEn,
+    tentZone: tentZoneRaw,
+    emergencyContact,
+  } = parsed.data;
 
-  if (existing.length > 0) {
-    res.status(409).json({ error: "رقم الهاتف أو رقم الجواز مسجل مسبقاً" });
+  if (!/[0-9]/.test(password) || !/[a-zA-Z]/.test(password)) {
+    res.status(400).json({
+      error: "يجب أن تحتوي كلمة المرور على رقم وحرف على الأقل",
+    });
     return;
   }
 
-  const passwordHash = await bcrypt.hash(password, 12);
-  const [user] = await db.insert(usersTable).values({
-    passportNo,
-    fullNameAr,
-    fullNameEn: fullNameEn ?? null,
-    nationality,
-    phone,
-    passwordHash,
-    tentZone: tentZone ?? null,
-    emergencyContact: emergencyContact ?? null,
-  }).returning();
+  const fullNameAr = (
+    fullNameArRaw?.trim() ||
+    `${firstName.trim()} ${lastName.trim()}`.trim()
+  ).slice(0, 100);
+  const userSuppliedPassport = Boolean(passportNoRaw?.trim());
+  let passportNo = passportNoRaw?.trim() || generatePlaceholderPassport();
+  if (passportNo.length > 20) {
+    res.status(400).json({ error: "رقم الجواز يجب ألا يتجاوز 20 حرفاً" });
+    return;
+  }
+  const tentZoneRawCombined = tentZoneRaw?.trim() || hotelName.trim();
+  const tentZone = tentZoneRawCombined
+    ? tentZoneRawCombined.slice(0, 200)
+    : null;
+  const nat = nationality.trim().toUpperCase();
 
-  const payload = { userId: user.id, phone: user.phone };
-  res.status(201).json({
-    accessToken: signAccessToken(payload),
-    refreshToken: signRefreshToken(payload),
-    user: sanitizeUser(user),
-  });
+  const [phoneHit] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.phone, phone.trim()))
+    .limit(1);
+  if (phoneHit) {
+    res.status(409).json({ error: "رقم الهاتف مستخدم بالفعل" });
+    return;
+  }
+
+  if (userSuppliedPassport) {
+    const [dupPass] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.passportNo, passportNo))
+      .limit(1);
+    if (dupPass) {
+      res.status(409).json({ error: "رقم الجواز مسجل مسبقاً" });
+      return;
+    }
+  } else {
+    let dup = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.passportNo, passportNo))
+      .limit(1);
+    let attempts = 0;
+    while (dup.length > 0 && attempts < 8) {
+      passportNo = generatePlaceholderPassport();
+      dup = await db
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.passportNo, passportNo))
+        .limit(1);
+      attempts++;
+    }
+    if (dup.length > 0) {
+      res.status(409).json({ error: "تعذر إنشاء رقم جواز فريد، حاول مجدداً" });
+      return;
+    }
+  }
+
+  const passwordHash = await bcrypt.hash(password, 12);
+
+  try {
+    const result = await db.transaction(async (tx) => {
+      const [user] = await tx
+        .insert(usersTable)
+        .values({
+          passportNo,
+          fullNameAr,
+          fullNameEn: fullNameEn ?? null,
+          nationality: nat,
+          phone: phone.trim(),
+          passwordHash,
+          tentZone: tentZone,
+          emergencyContact: emergencyContact ?? null,
+        })
+        .returning();
+
+      let inviteCode = generateInviteCode();
+      let inviteAttempts = 0;
+      while (inviteAttempts < 5) {
+        const existing = await tx
+          .select({ id: groupsTable.id })
+          .from(groupsTable)
+          .where(eq(groupsTable.inviteCode, inviteCode))
+          .limit(1);
+        if (existing.length === 0) break;
+        inviteCode = generateInviteCode();
+        inviteAttempts++;
+      }
+
+      const [group] = await tx
+        .insert(groupsTable)
+        .values({
+          nameAr: groupName.trim().slice(0, 100),
+          agency: null,
+          leaderId: user.id,
+          inviteCode,
+          maxMembers: 50,
+        })
+        .returning();
+
+      await tx
+        .update(usersTable)
+        .set({ groupId: group.id })
+        .where(eq(usersTable.id, user.id));
+
+      return {
+        user: { ...user, groupId: group.id },
+      };
+    });
+
+    const payload = { userId: result.user.id, phone: result.user.phone };
+    res.status(201).json({
+      accessToken: signAccessToken(payload),
+      refreshToken: signRefreshToken(payload),
+      user: sanitizeUser(result.user),
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("register transaction failed", msg, e);
+    res.status(500).json({ error: "حدث خطأ أثناء إنشاء الحساب" });
+  }
 });
 
 router.post("/auth/login", async (req, res): Promise<void> => {

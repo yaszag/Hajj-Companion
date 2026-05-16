@@ -42,6 +42,8 @@ router.get("/manasik", requireAuth, async (req, res): Promise<void> => {
       commonMistakes: item.commonMistakes,
       malikirNote: item.malikirNote,
       practicalTip: item.practicalTip,
+      importantAdvice: item.importantAdvice,
+      keyDua: item.keyDua ?? null,
       status: p?.status ?? "pending",
       startedAt: p?.startedAt?.toISOString() ?? null,
       completedAt: p?.completedAt?.toISOString() ?? null,

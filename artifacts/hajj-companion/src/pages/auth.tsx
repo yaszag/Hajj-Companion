@@ -1,234 +1,472 @@
-import React, { useState } from "react";
-import { useLocation } from "wouter";
+import React from "react";
+import { Link, useLocation } from "wouter";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useAuth } from "@/contexts/AuthContext";
-import { useLogin, useRegister } from "@workspace/api-client-react";
-import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Moon, Star } from "lucide-react";
+import {
+  useLogin,
+  useRegister,
+} from "@workspace/api-client-react";
+import {
+  HajjButton,
+  HajjInput,
+  HajjNationalitySelect,
+  useHajjToast,
+} from "@/components/ui/hajj";
+import { cn } from "@/lib/utils";
+
+const nameRegex = /^[\u0600-\u06FFa-zA-Z\s'\-]+$/;
+
+const loginSchema = z.object({
+  phone: z.string().min(1, "أدخل رقم هاتفك"),
+  password: z.string().min(1, "أدخل كلمة المرور"),
+});
+
+const registerSchema = z
+  .object({
+    firstName: z
+      .string()
+      .min(2, "الاسم قصير جداً")
+      .regex(nameRegex, "يسمح بالأحرف فقط"),
+    lastName: z
+      .string()
+      .min(2, "اللقب قصير جداً")
+      .regex(nameRegex, "يسمح بالأحرف فقط"),
+    nationality: z.string().length(2, "اختر جنسيتك"),
+    groupName: z.string().min(3, "اسم الفوج قصير جداً").max(100),
+    hotelName: z.string().min(2, "اسم الفندق مطلوب").max(200),
+    phone: z.string().regex(/^\+?[0-9]{8,15}$/, "رقم الهاتف غير صحيح"),
+    password: z
+      .string()
+      .min(8, "8 أحرف على الأقل")
+      .regex(/[0-9]/, "يجب أن تحتوي على رقم")
+      .regex(/[a-zA-Z]/, "يجب أن تحتوي على حرف"),
+    confirmPassword: z.string(),
+  })
+  .refine((d) => d.password === d.confirmPassword, {
+    message: "كلمات المرور غير متطابقة",
+    path: ["confirmPassword"],
+  });
+
+type LoginValues = z.infer<typeof loginSchema>;
+type RegisterValues = z.infer<typeof registerSchema>;
+
+function passwordStrength(pw: string) {
+  if (pw.length < 8) return { level: 1 as const, label: "ضعيفة" };
+  const hasNum = /[0-9]/.test(pw);
+  const hasUp = /[A-Z]/.test(pw);
+  const hasSpec = /[^A-Za-z0-9]/.test(pw);
+  if (hasNum && hasUp && hasSpec) return { level: 4 as const, label: "قوية" };
+  if (hasNum || hasUp) return { level: 3 as const, label: "جيدة" };
+  return { level: 2 as const, label: "متوسطة" };
+}
+
+function isRecordWithStatus(e: unknown): e is { status: number; data?: { error?: string } | null } {
+  return typeof e === "object" && e !== null && "status" in e && typeof (e as { status: unknown }).status === "number";
+}
+
+function apiErrorMessage(err: unknown): string | undefined {
+  if (!isRecordWithStatus(err)) return undefined;
+  const d = err.data;
+  if (d && typeof d === "object" && "error" in d && typeof (d as { error: unknown }).error === "string") {
+    return (d as { error: string }).error;
+  }
+  return undefined;
+}
 
 export default function AuthPage() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { login, isAuthenticated } = useAuth();
-  const { toast } = useToast();
-  
-  if (isAuthenticated) {
-    setLocation("/");
-    return null;
-  }
+  const { toast } = useHajjToast();
+  const isRegister = location === "/auth";
 
   const loginMutation = useLogin();
   const registerMutation = useRegister();
 
-  // Login form state
-  const [loginPhone, setLoginPhone] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
+  const [shakeLogin, setShakeLogin] = React.useState(false);
+  const [shakeRegister, setShakeRegister] = React.useState(false);
 
-  // Register form state
-  const [regPassport, setRegPassport] = useState("");
-  const [regName, setRegName] = useState("");
-  const [regNationality, setRegNationality] = useState("");
-  const [regPhone, setRegPhone] = useState("");
-  const [regPassword, setRegPassword] = useState("");
+  const loginForm = useForm<LoginValues>({
+    resolver: zodResolver(loginSchema),
+    mode: "onBlur",
+    defaultValues: { phone: "+216", password: "" },
+  });
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!loginPhone || !loginPassword) return;
+  const registerForm = useForm<RegisterValues>({
+    resolver: zodResolver(registerSchema),
+    mode: "onBlur",
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      nationality: "",
+      groupName: "",
+      hotelName: "",
+      phone: "+216",
+      password: "",
+      confirmPassword: "",
+    },
+  });
 
-    loginMutation.mutate({
-      data: { phone: loginPhone, password: loginPassword }
-    }, {
-      onSuccess: (data) => {
-        login(data.accessToken, data.user, data.refreshToken);
-        toast({ title: "تم تسجيل الدخول بنجاح" });
-        setLocation("/");
+  const regPwd = registerForm.watch("password");
+  const strength = passwordStrength(regPwd ?? "");
+
+  React.useEffect(() => {
+    if (isAuthenticated) setLocation("/");
+  }, [isAuthenticated, setLocation]);
+
+  if (isAuthenticated) return null;
+
+  const onLoginSubmit = loginForm.handleSubmit((values) => {
+    loginMutation.mutate(
+      { data: { phone: values.phone.trim(), password: values.password } },
+      {
+        onSuccess: (data) => {
+          login(data.accessToken, data.user, data.refreshToken);
+          toast({ type: "success", message: "✅ تم تسجيل الدخول بنجاح" });
+          setLocation("/");
+        },
+        onError: (err) => {
+          setShakeLogin(true);
+          window.setTimeout(() => setShakeLogin(false), 500);
+          const msg = "رقم الهاتف أو كلمة المرور غير صحيحة";
+          loginForm.setError("phone", { message: msg });
+          loginForm.setError("password", { message: msg });
+          if (!isRecordWithStatus(err) || err.status !== 401) {
+            toast({ type: "error", message: "❌ حدث خطأ، حاول مجدداً" });
+          }
+        },
       },
-      onError: (error) => {
-        toast({ 
-          title: "خطأ في تسجيل الدخول", 
-          description: error.data?.error || "الرجاء التحقق من البيانات والمحاولة مرة أخرى",
-          variant: "destructive" 
-        });
-      }
-    });
-  };
+    );
+  });
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!regPassport || !regName || !regNationality || !regPhone || !regPassword) {
-      toast({ title: "الرجاء إكمال جميع الحقول", variant: "destructive" });
-      return;
+  const scrollToFirstRegisterError = () => {
+    const order: (keyof RegisterValues)[] = [
+      "firstName",
+      "lastName",
+      "nationality",
+      "groupName",
+      "hotelName",
+      "phone",
+      "password",
+      "confirmPassword",
+    ];
+    for (const key of order) {
+      if (registerForm.formState.errors[key]) {
+        const el = document.getElementById(String(key));
+        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+        break;
+      }
     }
-
-    registerMutation.mutate({
-      data: {
-        passportNo: regPassport,
-        fullNameAr: regName,
-        nationality: regNationality,
-        phone: regPhone,
-        password: regPassword
-      }
-    }, {
-      onSuccess: (data) => {
-        login(data.accessToken, data.user, data.refreshToken);
-        toast({ title: "تم إنشاء الحساب بنجاح" });
-        setLocation("/");
-      },
-      onError: (error) => {
-        toast({ 
-          title: "خطأ في التسجيل", 
-          description: error.data?.error || "حدث خطأ أثناء إنشاء الحساب",
-          variant: "destructive" 
-        });
-      }
-    });
   };
+
+  const onRegisterSubmit = registerForm.handleSubmit(
+    async (values) => {
+      try {
+        const data = await registerMutation.mutateAsync({
+          data: {
+            firstName: values.firstName.trim(),
+            lastName: values.lastName.trim(),
+            nationality: values.nationality.toUpperCase(),
+            phone: values.phone.trim(),
+            password: values.password,
+            hotelName: values.hotelName.trim(),
+            groupName: values.groupName.trim(),
+          },
+        });
+
+        login(data.accessToken, data.user, data.refreshToken);
+
+        toast({ type: "success", message: "✅ تم إنشاء الحساب بنجاح" });
+        setLocation("/");
+      } catch (err) {
+        if (isRecordWithStatus(err) && err.status === 409) {
+          const msg = apiErrorMessage(err) ?? "رقم الهاتف مستخدم بالفعل";
+          toast({ type: "error", message: `❌ ${msg}` });
+          if (msg.includes("هاتف")) registerForm.setFocus("phone");
+          return;
+        }
+        toast({ type: "error", message: "❌ حدث خطأ، حاول مجدداً" });
+      }
+    },
+    () => {
+      setShakeRegister(true);
+      window.setTimeout(() => setShakeRegister(false), 500);
+      scrollToFirstRegisterError();
+    },
+  );
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background relative overflow-hidden">
-      {/* Decorative background elements */}
-      <div className="absolute top-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-primary/5 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-[-10%] left-[-10%] w-[40vw] h-[40vw] bg-secondary/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="auth-page min-h-screen">
+      <div className="auth-pattern" aria-hidden />
 
-      <div className="w-full max-w-md z-10">
-        <div className="flex flex-col items-center mb-8 text-center">
-          <div className="w-20 h-20 bg-primary rounded-full flex items-center justify-center mb-4 shadow-lg">
-            <Moon className="w-10 h-10 text-primary-foreground" />
+      <div className="relative z-10 mx-auto flex min-h-screen max-w-lg flex-col px-5 py-8">
+        <div className="mb-8 flex flex-col items-center pt-6">
+          <div className="auth-kaaba-icon mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-surface shadow-lg ring-1 ring-gold/30">
+            <span className="text-3xl">🕋</span>
           </div>
-          <h1 className="text-3xl font-bold text-primary mb-2">رفيق الحج</h1>
-          <p className="text-muted-foreground">دليلك الموثوق في رحلتك الإيمانية</p>
+          <h1 className="font-amiri text-2xl font-bold text-foreground">رفيق الحج</h1>
+          <p className="mt-1 text-sm text-muted-foreground">رفيقك الأمين في رحلة العمر</p>
+
+          <div className="mt-6 flex w-full max-w-xs overflow-hidden rounded-xl bg-surface p-1 shadow-card">
+            <button
+              type="button"
+              onClick={() => !isRegister ? null : setLocation("/login")}
+              className={cn(
+                "auth-tab flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all duration-300",
+                !isRegister ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              تسجيل الدخول
+            </button>
+            <button
+              type="button"
+              onClick={() => isRegister ? null : setLocation("/auth")}
+              className={cn(
+                "auth-tab flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all duration-300",
+                isRegister ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              حساب جديد
+            </button>
+          </div>
         </div>
 
-        <Tabs defaultValue="login" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-6">
-            <TabsTrigger value="login">دخول</TabsTrigger>
-            <TabsTrigger value="register">حساب جديد</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="login">
-            <Card className="border-primary/20 shadow-md">
-              <CardHeader>
-                <CardTitle>تسجيل الدخول</CardTitle>
-                <CardDescription>أدخل رقم هاتفك وكلمة المرور للمتابعة</CardDescription>
-              </CardHeader>
-              <form onSubmit={handleLogin}>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">رقم الهاتف</Label>
-                    <Input 
-                      id="phone" 
-                      placeholder="05xxxxxxxx" 
-                      value={loginPhone}
-                      onChange={(e) => setLoginPhone(e.target.value)}
-                      dir="ltr"
-                      className="text-right"
-                      required
+        <div className="auth-card flex-1 rounded-2xl bg-surface p-6 shadow-card ring-1 ring-border/50">
+          {!isRegister ? (
+            <form
+              onSubmit={onLoginSubmit}
+              className={cn("space-y-5", shakeLogin && "animate-shake")}
+              noValidate
+            >
+              <div className="auth-field animate-slide-up">
+                <HajjInput
+                  label="رقم الهاتف"
+                  name="phone"
+                  register={loginForm.register("phone")}
+                  value={loginForm.watch("phone")}
+                  error={loginForm.formState.errors.phone?.message}
+                  dir="ltr"
+                  prefix={<span className="font-mono text-xs">📱</span>}
+                  autoComplete="tel"
+                />
+              </div>
+
+              <div className="auth-field animate-slide-up stagger-1">
+                <HajjInput
+                  label="كلمة المرور"
+                  name="password"
+                  type="password"
+                  register={loginForm.register("password")}
+                  value={loginForm.watch("password")}
+                  error={loginForm.formState.errors.password?.message}
+                  autoComplete="current-password"
+                />
+              </div>
+
+              <div className="auth-field flex justify-end animate-slide-up stagger-2">
+                <button
+                  type="button"
+                  className="text-sm font-medium text-primary transition-colors hover:text-primary-dark min-h-11 px-1"
+                  onClick={() =>
+                    toast({
+                      type: "info",
+                      message: "ℹ️ تواصل مع مشرف مجموعتك أو الدعم لاستعادة كلمة المرور",
+                    })
+                  }
+                >
+                  نسيت كلمة المرور؟
+                </button>
+              </div>
+
+              <div className="auth-field animate-slide-up stagger-2">
+                <HajjButton
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  loading={loginMutation.isPending}
+                >
+                  {loginMutation.isPending ? "جاري الدخول..." : "تسجيل الدخول"}
+                </HajjButton>
+              </div>
+
+              <div className="auth-divider relative py-3 animate-slide-up stagger-3">
+                <hr className="border-border" />
+                <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface px-3 text-xs text-muted-foreground">
+                  أو
+                </span>
+              </div>
+
+              <div className="auth-field animate-slide-up stagger-3">
+                <HajjButton
+                  type="button"
+                  variant="secondary"
+                  size="lg"
+                  fullWidth
+                  onClick={() => setLocation("/auth")}
+                >
+                  إنشاء حساب جديد
+                </HajjButton>
+              </div>
+            </form>
+          ) : (
+            <form
+              onSubmit={onRegisterSubmit}
+              className={cn("space-y-4", shakeRegister && "animate-shake")}
+              noValidate
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <div className="auth-field animate-slide-up">
+                  <HajjInput
+                    label="الاسم"
+                    name="firstName"
+                    register={registerForm.register("firstName")}
+                    value={registerForm.watch("firstName")}
+                    error={registerForm.formState.errors.firstName?.message}
+                    autoComplete="given-name"
+                  />
+                </div>
+                <div className="auth-field animate-slide-up stagger-1">
+                  <HajjInput
+                    label="اللقب"
+                    name="lastName"
+                    register={registerForm.register("lastName")}
+                    value={registerForm.watch("lastName")}
+                    error={registerForm.formState.errors.lastName?.message}
+                    autoComplete="family-name"
+                  />
+                </div>
+              </div>
+
+              <div className="auth-field animate-slide-up stagger-2" id="nationality">
+                <Controller
+                  name="nationality"
+                  control={registerForm.control}
+                  render={({ field }) => (
+                    <HajjNationalitySelect
+                      value={field.value}
+                      onChange={field.onChange}
+                      error={registerForm.formState.errors.nationality?.message}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password">كلمة المرور</Label>
-                    <Input 
-                      id="password" 
-                      type="password" 
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      dir="ltr"
-                      className="text-right"
-                      required
-                    />
-                  </div>
-                </CardContent>
-                <CardFooter>
-                  <Button type="submit" className="w-full" disabled={loginMutation.isPending}>
-                    {loginMutation.isPending ? "جاري الدخول..." : "دخول"}
-                  </Button>
-                </CardFooter>
-              </form>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="register">
-            <Card className="border-primary/20 shadow-md">
-              <CardHeader>
-                <CardTitle>حساب جديد</CardTitle>
-                <CardDescription>أدخل بياناتك لإنشاء حساب جديد</CardDescription>
-              </CardHeader>
-              <form onSubmit={handleRegister}>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="reg-name">الاسم الثلاثي (بالعربية)</Label>
-                    <Input 
-                      id="reg-name" 
-                      placeholder="أحمد محمد علي" 
-                      value={regName}
-                      onChange={(e) => setRegName(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="reg-passport">رقم الجواز</Label>
-                    <Input 
-                      id="reg-passport" 
-                      placeholder="A1234567" 
-                      value={regPassport}
-                      onChange={(e) => setRegPassport(e.target.value)}
-                      dir="ltr"
-                      className="text-right"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="reg-nationality">الجنسية (رمز الدولة)</Label>
-                    <Input 
-                      id="reg-nationality" 
-                      placeholder="SA" 
-                      maxLength={2}
-                      value={regNationality}
-                      onChange={(e) => setRegNationality(e.target.value.toUpperCase())}
-                      dir="ltr"
-                      className="text-right"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="reg-phone">رقم الهاتف</Label>
-                    <Input 
-                      id="reg-phone" 
-                      placeholder="05xxxxxxxx" 
-                      value={regPhone}
-                      onChange={(e) => setRegPhone(e.target.value)}
-                      dir="ltr"
-                      className="text-right"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="reg-password">كلمة المرور</Label>
-                    <Input 
-                      id="reg-password" 
-                      type="password" 
-                      value={regPassword}
-                      onChange={(e) => setRegPassword(e.target.value)}
-                      dir="ltr"
-                      className="text-right"
-                      minLength={6}
-                      required
-                    />
-                  </div>
-                </CardContent>
-                <CardFooter>
-                  <Button type="submit" className="w-full" disabled={registerMutation.isPending}>
-                    {registerMutation.isPending ? "جاري التسجيل..." : "تسجيل"}
-                  </Button>
-                </CardFooter>
-              </form>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                  )}
+                />
+              </div>
+
+              <div className="auth-field animate-slide-up stagger-2">
+                <HajjInput
+                  label="اسم الفوج"
+                  name="groupName"
+                  register={registerForm.register("groupName")}
+                  value={registerForm.watch("groupName")}
+                  error={registerForm.formState.errors.groupName?.message}
+                  placeholder="مثال: فوج النور"
+                />
+              </div>
+
+              <div className="auth-field animate-slide-up stagger-3">
+                <HajjInput
+                  label="اسم الفندق / الإقامة"
+                  name="hotelName"
+                  register={registerForm.register("hotelName")}
+                  value={registerForm.watch("hotelName")}
+                  error={registerForm.formState.errors.hotelName?.message}
+                />
+              </div>
+
+              <div className="auth-field animate-slide-up stagger-3">
+                <HajjInput
+                  label="رقم الهاتف"
+                  name="phone"
+                  register={registerForm.register("phone")}
+                  value={registerForm.watch("phone")}
+                  error={registerForm.formState.errors.phone?.message}
+                  placeholder="+216..."
+                  dir="ltr"
+                  prefix={<span className="font-mono text-xs whitespace-nowrap">🇹🇳 +216</span>}
+                  autoComplete="tel"
+                />
+              </div>
+
+              <div className="auth-field animate-slide-up stagger-4">
+                <HajjInput
+                  label="كلمة المرور"
+                  name="password"
+                  type="password"
+                  register={registerForm.register("password")}
+                  value={registerForm.watch("password")}
+                  error={registerForm.formState.errors.password?.message}
+                  autoComplete="new-password"
+                />
+                <PasswordStrengthBar strength={strength} />
+              </div>
+
+              <div className="auth-field animate-slide-up stagger-5">
+                <HajjInput
+                  label="تأكيد كلمة المرور"
+                  name="confirmPassword"
+                  type="password"
+                  register={registerForm.register("confirmPassword")}
+                  value={registerForm.watch("confirmPassword")}
+                  error={registerForm.formState.errors.confirmPassword?.message}
+                  autoComplete="new-password"
+                />
+              </div>
+
+              <div className="auth-field animate-slide-up stagger-5">
+                <HajjButton
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  loading={registerMutation.isPending}
+                  className="mt-2"
+                >
+                  {registerMutation.isPending ? "جاري الإنشاء..." : "إنشاء الحساب"}
+                </HajjButton>
+              </div>
+
+              <p className="auth-field pt-2 text-center text-sm text-muted-foreground animate-slide-up stagger-5">
+                لديك حساب؟{" "}
+                <Link href="/login" className="font-semibold text-primary transition-colors hover:text-primary-dark">
+                  تسجيل الدخول
+                </Link>
+              </p>
+            </form>
+          )}
+        </div>
       </div>
+    </div>
+  );
+}
+
+function PasswordStrengthBar({
+  strength,
+}: {
+  strength: ReturnType<typeof passwordStrength>;
+}) {
+  const { level, label } = strength;
+  const segClass = (i: number) => {
+    if (i > level) return "bg-surface2";
+    if (level === 1) return "bg-rukn";
+    if (level === 2) return "bg-wajib";
+    if (level === 3) return "bg-gold";
+    return "bg-sunnah";
+  };
+  return (
+    <div className="mt-2 space-y-1.5">
+      <div className="flex gap-1">
+        {[1, 2, 3, 4].map((i) => (
+          <div
+            key={i}
+            className={cn(
+              "h-1.5 flex-1 overflow-hidden rounded-pill transition-all duration-300",
+              segClass(i),
+            )}
+          />
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground">{label}</p>
     </div>
   );
 }

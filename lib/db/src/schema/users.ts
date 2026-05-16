@@ -17,7 +17,7 @@ export const usersTable = pgTable("users", {
   nationality: varchar("nationality", { length: 2 }).notNull(),
   phone: varchar("phone", { length: 20 }).unique().notNull(),
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
-  tentZone: varchar("tent_zone", { length: 15 }),
+  tentZone: varchar("tent_zone", { length: 200 }),
   groupId: uuid("group_id").references(() => groupsTable.id, { onDelete: "set null" }),
   emergencyContact: varchar("emergency_contact", { length: 20 }),
   nusukType: varchar("nusuk_type", { length: 10 }),

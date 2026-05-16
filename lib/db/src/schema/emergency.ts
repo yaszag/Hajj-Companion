@@ -2,6 +2,7 @@ import {
   pgTable,
   uuid,
   varchar,
+  text,
   timestamp,
   doublePrecision,
 } from "drizzle-orm/pg-core";
@@ -15,6 +16,7 @@ export const emergencyAlertsTable = pgTable("emergency_alerts", {
     .notNull()
     .references(() => usersTable.id, { onDelete: "cascade" }),
   alertType: varchar("alert_type", { length: 20 }).default("sos").notNull(),
+  message: text("message"),
   latitude: doublePrecision("latitude"),
   longitude: doublePrecision("longitude"),
   status: varchar("status", { length: 15 }).default("active").notNull(),

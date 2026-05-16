@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { SessionExpiredBridge } from "@/components/SessionExpiredBridge";
+import { HajjToastProvider } from "@/components/ui/hajj";
 
 // Pages
 import Dashboard from "@/pages/dashboard";
@@ -49,13 +50,15 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <AuthProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <SessionExpiredBridge />
-            <AppRouter />
-          </WouterRouter>
-          <Toaster />
-        </AuthProvider>
+        <HajjToastProvider>
+          <AuthProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <SessionExpiredBridge />
+              <AppRouter />
+            </WouterRouter>
+            <Toaster />
+          </AuthProvider>
+        </HajjToastProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

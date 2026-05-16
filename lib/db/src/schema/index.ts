@@ -1,4 +1,5 @@
 export * from "./groups";
+export * from "./group-members";
 export * from "./users";
 export * from "./places";
 export * from "./navigation";

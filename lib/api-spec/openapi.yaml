@@ -66,7 +66,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "409":
-          description: Phone or passport already registered
+          description: Phone or passport already registered (see error message)
           content:
             application/json:
               schema:
@@ -632,6 +632,30 @@ paths:
               schema:
                 $ref: "#/components/schemas/EmergencyAlert"
 
+  /emergency/group/{groupId}:
+    get:
+      operationId: getGroupEmergencyAlerts
+      tags: [emergency]
+      summary: Get active emergency alerts for group members
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: List of active emergency alerts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GroupEmergencyAlert"
+
   # DASHBOARD
   /dashboard:
     get:
@@ -870,23 +894,42 @@ components:
     # AUTH
     RegisterInput:
       type: object
-      required: [passportNo, fullNameAr, nationality, phone, password]
+      required: [firstName, lastName, nationality, phone, password, hotelName, groupName]
       properties:
-        passportNo:
+        firstName:
           type: string
-        fullNameAr:
+          minLength: 2
+          maxLength: 60
+        lastName:
           type: string
-        fullNameEn:
-          type: ["string", "null"]
+          minLength: 2
+          maxLength: 60
         nationality:
           type: string
           minLength: 2
           maxLength: 2
         phone:
           type: string
+          pattern: "^\\+?[0-9]{8,15}$"
         password:
           type: string
-          minLength: 6
+          minLength: 8
+        hotelName:
+          type: string
+          minLength: 2
+          maxLength: 200
+        groupName:
+          type: string
+          minLength: 3
+          maxLength: 100
+        passportNo:
+          type: ["string", "null"]
+          description: Optional legacy passport; if omitted the server assigns a unique placeholder.
+        fullNameAr:
+          type: ["string", "null"]
+          description: Optional legacy full Arabic name; if omitted the server builds it from firstName and lastName.
+        fullNameEn:
+          type: ["string", "null"]
         tentZone:
           type: ["string", "null"]
         emergencyContact:
@@ -1344,6 +1387,8 @@ components:
           type: ["number", "null"]
         alertType:
           type: string
+        message:
+          type: ["string", "null"]
 
     EmergencyAlert:
       type: object
@@ -1357,6 +1402,8 @@ components:
           format: uuid
         alertType:
           type: string
+        message:
+          type: ["string", "null"]
         latitude:
           type: ["number", "null"]
         longitude:
@@ -1370,6 +1417,43 @@ components:
         resolvedAt:
           type: ["string", "null"]
           format: date-time
+
+    GroupEmergencyAlert:
+      type: object
+      required: [id, userId, alertType, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        alertType:
+          type: string
+        message:
+          type: ["string", "null"]
+        latitude:
+          type: ["number", "null"]
+        longitude:
+          type: ["number", "null"]
+        status:
+          type: string
+          enum: [active, resolved]
+        createdAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: ["string", "null"]
+          format: date-time
+        user:
+          type: ["object", "null"]
+          properties:
+            fullNameAr:
+              type: string
+            phone:
+              type: string
+            tentZone:
+              type: ["string", "null"]
 
     # DASHBOARD
     DashboardSummary:
