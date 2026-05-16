@@ -29,6 +29,7 @@ router.get("/manasik", requireAuth, async (req, res): Promise<void> => {
 
   const items = applicableItems.map((item) => {
     const p = progressMap.get(item.key);
+    const extended = item as typeof item & { importantAdvice?: string[]; keyDua?: string };
     return {
       key: item.key,
       titleAr: item.titleAr,
@@ -42,8 +43,8 @@ router.get("/manasik", requireAuth, async (req, res): Promise<void> => {
       commonMistakes: item.commonMistakes,
       malikirNote: item.malikirNote,
       practicalTip: item.practicalTip,
-      importantAdvice: item.importantAdvice,
-      keyDua: item.keyDua ?? null,
+      importantAdvice: extended.importantAdvice ?? [],
+      keyDua: extended.keyDua ?? null,
       status: p?.status ?? "pending",
       startedAt: p?.startedAt?.toISOString() ?? null,
       completedAt: p?.completedAt?.toISOString() ?? null,
