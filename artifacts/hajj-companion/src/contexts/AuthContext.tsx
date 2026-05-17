@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { User } from "@workspace/api-client-react";
+import { User, getMe } from "@workspace/api-client-react";
 import { setupApiClient } from "../lib/api";
 
 interface AuthContextType {
@@ -7,6 +7,7 @@ interface AuthContextType {
   token: string | null;
   login: (accessToken: string, user: User, refreshToken?: string) => void;
   logout: () => void;
+  refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -56,6 +57,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(newUser);
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const fresh = await getMe();
+      setUser(fresh);
+      localStorage.setItem("hajj_user", JSON.stringify(fresh));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   useEffect(() => {
     migrateLegacyAccessToken();
     let storedToken: string | null = null;
@@ -88,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isAuthenticated: !!token }}>
+    <AuthContext.Provider value={{ user, token, login, logout, refreshUser, isAuthenticated: !!token }}>
       {children}
     </AuthContext.Provider>
   );

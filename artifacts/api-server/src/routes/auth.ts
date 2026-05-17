@@ -1,8 +1,7 @@
-import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
-import { db, usersTable, groupsTable } from "@workspace/db";
+import { db, usersTable } from "@workspace/db";
 import {
   RegisterBody,
   LoginBody,
@@ -22,9 +21,10 @@ function generateInviteCode(): string {
 }
 
 function generatePlaceholderPassport(): string {
-  // Must fit users.passport_no varchar(20)
-  const hex = randomUUID().replace(/-/g, "");
-  return `NP-${hex.slice(0, 17)}`;
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let result = "NP-";
+  for (let i = 0; i < 14; i++) result += chars[Math.floor(Math.random() * chars.length)];
+  return result;
 }
 
 router.post("/auth/register", async (req, res): Promise<void> => {
@@ -41,7 +41,6 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     phone,
     password,
     hotelName,
-    groupName,
     passportNo: passportNoRaw,
     fullNameAr: fullNameArRaw,
     fullNameEn,
@@ -117,64 +116,29 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   const passwordHash = await bcrypt.hash(password, 12);
 
   try {
-    const result = await db.transaction(async (tx) => {
-      const [user] = await tx
-        .insert(usersTable)
-        .values({
-          passportNo,
-          fullNameAr,
-          fullNameEn: fullNameEn ?? null,
-          nationality: nat,
-          phone: phone.trim(),
-          passwordHash,
-          tentZone: tentZone,
-          emergencyContact: emergencyContact ?? null,
-        })
-        .returning();
+    const [user] = await db
+      .insert(usersTable)
+      .values({
+        passportNo,
+        fullNameAr,
+        fullNameEn: fullNameEn ?? null,
+        nationality: nat,
+        phone: phone.trim(),
+        passwordHash,
+        tentZone: tentZone,
+        emergencyContact: emergencyContact ?? null,
+      })
+      .returning();
 
-      let inviteCode = generateInviteCode();
-      let inviteAttempts = 0;
-      while (inviteAttempts < 5) {
-        const existing = await tx
-          .select({ id: groupsTable.id })
-          .from(groupsTable)
-          .where(eq(groupsTable.inviteCode, inviteCode))
-          .limit(1);
-        if (existing.length === 0) break;
-        inviteCode = generateInviteCode();
-        inviteAttempts++;
-      }
-
-      const [group] = await tx
-        .insert(groupsTable)
-        .values({
-          nameAr: groupName.trim().slice(0, 100),
-          agency: null,
-          leaderId: user.id,
-          inviteCode,
-          maxMembers: 50,
-        })
-        .returning();
-
-      await tx
-        .update(usersTable)
-        .set({ groupId: group.id })
-        .where(eq(usersTable.id, user.id));
-
-      return {
-        user: { ...user, groupId: group.id },
-      };
-    });
-
-    const payload = { userId: result.user.id, phone: result.user.phone };
+    const payload = { userId: user.id, phone: user.phone };
     res.status(201).json({
       accessToken: signAccessToken(payload),
       refreshToken: signRefreshToken(payload),
-      user: sanitizeUser(result.user),
+      user: sanitizeUser(user),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error("register transaction failed", msg, e);
+    console.error("register failed", msg, e);
     res.status(500).json({ error: "حدث خطأ أثناء إنشاء الحساب" });
   }
 });

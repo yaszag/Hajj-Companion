@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import {
   Users, UserPlus, Copy, Phone, MapPin,
   AlertTriangle, Clock, Navigation, MessageSquare,
-  LogOut, QrCode, Bell, CheckCircle2, Share2, ArrowRight,
+  LogOut, QrCode, Bell, Share2, ArrowRight,
   Plus, Link2, ChevronRight, XCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -74,11 +74,11 @@ function extractInviteCode(input: string): string {
    ═══════════════════════════════════════ */
 function NoGroupView() {
   const { toast } = useToast();
+  const { refreshUser } = useAuth();
   const [location] = useLocation();
   const [groupLink, setGroupLink] = useState("");
   const [groupName, setGroupName] = useState("");
   const [mode, setMode] = useState<"join" | "create">("join");
-  const [createdGroup, setCreatedGroup] = useState<{ name: string; code: string } | null>(null);
 
   const joinGroup = useJoinGroup();
   const createGroup = useCreateGroup();
@@ -99,9 +99,9 @@ function NoGroupView() {
     joinGroup.mutate(
       { data: { inviteCode: code } },
       {
-        onSuccess: () => {
+        onSuccess: async () => {
           toast({ title: "تم الانضمام للمجموعة بنجاح" });
-          window.location.reload();
+          await refreshUser();
         },
         onError: (err: unknown) => {
           const msg = (err as { data?: { error?: string } })?.data?.error ?? "رمز الدعوة غير صحيح";
@@ -117,85 +117,13 @@ function NoGroupView() {
     createGroup.mutate(
       { data: { nameAr: groupName.trim() } },
       {
-        onSuccess: (data) => {
-          setCreatedGroup({ name: data.nameAr, code: (data as unknown as { inviteCode: string }).inviteCode });
+        onSuccess: async () => {
           toast({ title: "تم إنشاء المجموعة بنجاح" });
+          await refreshUser();
         },
       }
     );
   };
-
-  if (createdGroup) {
-    const joinUrl = `${window.location.origin}${window.location.pathname}?join=${createdGroup.code}`;
-
-    return (
-      <AppLayout title="مجموعتي">
-        <div className="p-4 flex flex-col items-center pt-8">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-6 animate-scale-in">
-            <CheckCircle2 className="w-10 h-10 text-green-600" />
-          </div>
-          <h2 className="text-2xl font-bold mb-2">تم إنشاء المجموعة</h2>
-          <p className="text-muted-foreground text-center mb-6 max-w-xs">
-            انضم رفاقك عبر الرابط أو رمز الدعوة أدناه
-          </p>
-
-          <Card className="w-full max-w-sm border-2 border-primary/30 mb-4">
-            <CardContent className="p-5 space-y-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                  <span className="text-sm font-bold text-primary">١</span>
-                </div>
-                <h3 className="font-bold text-sm">أرسل الرابط لرفاقك</h3>
-              </div>
-              <div className="bg-muted/50 rounded-lg p-3 break-all">
-                <p className="text-xs font-mono text-primary" dir="ltr">{joinUrl}</p>
-              </div>
-              <Button
-                className="w-full"
-                onClick={() => {
-                  navigator.clipboard.writeText(joinUrl);
-                  toast({ title: "تم نسخ الرابط" });
-                }}
-              >
-                <Share2 className="w-4 h-4 ml-2" />
-                نسخ الرابط
-              </Button>
-              <p className="text-xs text-muted-foreground text-center">
-                عند فتح الرابط سينضمون لمجموعتك تلقائياً
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="w-full max-w-sm border border-border">
-            <CardContent className="p-5 space-y-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                  <span className="text-sm font-bold">٢</span>
-                </div>
-                <h3 className="font-bold text-sm">أو شارك رمز الدعوة</h3>
-              </div>
-              <div className="bg-muted/50 rounded-xl p-4 text-center">
-                <p className="font-mono text-3xl font-bold tracking-widest text-primary" dir="ltr">
-                  {createdGroup.code}
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => {
-                  navigator.clipboard.writeText(createdGroup.code);
-                  toast({ title: "تم نسخ الرمز" });
-                }}
-              >
-                <Copy className="w-4 h-4 ml-2" />
-                نسخ الرمز
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </AppLayout>
-    );
-  }
 
   return (
     <AppLayout title="مجموعتي">
