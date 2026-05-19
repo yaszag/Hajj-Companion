@@ -20,6 +20,8 @@ import DuasPage from "@/pages/duas";
 import DuasCategoryPage from "@/pages/duas-category";
 import DuasDetailPage from "@/pages/duas-detail";
 import NusukSelectPage from "@/pages/nusuk-select";
+import TasbihPage from "@/pages/tasbih";
+import KhatmaPage from "@/pages/khatma";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -41,6 +43,8 @@ function AppRouter() {
       <Route path="/duas/cat/:categoryId" component={DuasCategoryPage} />
       <Route path="/duas/view/:id" component={DuasDetailPage} />
       <Route path="/nusuk-select" component={NusukSelectPage} />
+      <Route path="/tasbih" component={TasbihPage} />
+      <Route path="/khatma" component={KhatmaPage} />
       <Route component={NotFound} />
     </Switch>
   );

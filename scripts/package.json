@@ -6,6 +6,7 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "seed:duas": "tsx ./src/seed-duas.ts",
+    "seed:tasbih": "tsx ./src/seed-tasbih.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

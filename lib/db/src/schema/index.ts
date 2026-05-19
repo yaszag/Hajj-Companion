@@ -7,3 +7,5 @@ export * from "./locations";
 export * from "./manasik";
 export * from "./emergency";
 export * from "./duas";
+export * from "./tasbih";
+export * from "./khatma";

@@ -9,6 +9,8 @@ import navigationRouter from "./navigation";
 import emergencyRouter from "./emergency";
 import dashboardRouter from "./dashboard";
 import duasRouter from "./duas";
+import tasbihRouter from "./tasbih";
+import khatmaRouter from "./khatma";
 
 const router: IRouter = Router();
 
@@ -22,5 +24,7 @@ router.use(navigationRouter);
 router.use(emergencyRouter);
 router.use(dashboardRouter);
 router.use(duasRouter);
+router.use(tasbihRouter);
+router.use(khatmaRouter);
 
 export default router;

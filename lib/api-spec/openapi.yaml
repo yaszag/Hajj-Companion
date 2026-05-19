@@ -6,7 +6,7 @@ info:
 servers:
   - url: /api
     description: Base API path
-tags:
+  tags:
   - name: health
     description: Health operations
   - name: auth
@@ -25,6 +25,14 @@ tags:
     description: Emergency alerts
   - name: dashboard
     description: Summary dashboard
+  - name: duas
+    description: Duas and adhkar
+  - name: tasbih
+    description: Tasbih counter and dhikr
+  - name: khatma
+    description: Quran completion tracker
+  - name: quran
+    description: Quran structure data
 
 paths:
   /healthz:
@@ -860,6 +868,321 @@ paths:
               schema:
                 $ref: "#/components/schemas/User"
 
+  # TASBIH
+  /tasbih/presets:
+    get:
+      operationId: getTasbihPresets
+      tags: [tasbih]
+      summary: Get curated tasbih presets
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of tasbih presets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TasbihPreset"
+
+  /tasbih/active:
+    get:
+      operationId: getActiveTasbih
+      tags: [tasbih]
+      summary: Get user's active tasbih session + today's stats
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Active tasbih session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TasbihSession"
+        "404":
+          description: No active session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /tasbih/select:
+    post:
+      operationId: selectTasbih
+      tags: [tasbih]
+      summary: Select a preset as active tasbih
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SelectTasbihInput"
+      responses:
+        "201":
+          description: Active session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TasbihSession"
+
+  /tasbih/increment:
+    post:
+      operationId: incrementTasbih
+      tags: [tasbih]
+      summary: Increment tasbih counter
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Updated session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TasbihSession"
+
+  /tasbih/reset-round:
+    post:
+      operationId: resetTasbihRound
+      tags: [tasbih]
+      summary: Complete a round and reset counter
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Round completed, counter reset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TasbihSession"
+
+  /tasbih/history:
+    get:
+      operationId: getTasbihHistory
+      tags: [tasbih]
+      summary: Get tasbih history (last 7 days)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Daily tasbih stats
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TasbihDayStats"
+
+  /tasbih/contextual-adhkar:
+    get:
+      operationId: getContextualAdhkar
+      tags: [tasbih]
+      summary: Get adhkar appropriate for current time of day
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Contextual adhkar
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TasbihPreset"
+
+  # QURAN STRUCTURE
+  /quran/surahs:
+    get:
+      operationId: getQuranSurahs
+      tags: [quran]
+      summary: Get all 114 surahs
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of surahs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/QuranSurah"
+
+  /quran/juz:
+    get:
+      operationId: getQuranJuz
+      tags: [quran]
+      summary: Get all 30 juz boundaries
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of juz
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/QuranJuz"
+
+  # KHATMA
+  /khatma:
+    post:
+      operationId: createKhatma
+      tags: [khatma]
+      summary: Create a new Khatma plan
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateKhatmaInput"
+      responses:
+        "201":
+          description: Khatma plan created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KhatmaPlan"
+
+  /khatma/active:
+    get:
+      operationId: getActiveKhatma
+      tags: [khatma]
+      summary: Get user's active Khatma plan with stats
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Active Khatma plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KhatmaPlanWithStats"
+        "404":
+          description: No active plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /khatma/history:
+    get:
+      operationId: getKhatmaHistory
+      tags: [khatma]
+      summary: Get completed Khatma plans
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Completed plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KhatmaPlan"
+
+  /khatma/{id}/log:
+    post:
+      operationId: logKhatmaReading
+      tags: [khatma]
+      summary: Log today's reading for a Khatma plan
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogKhatmaInput"
+      responses:
+        "201":
+          description: Reading logged, plan updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KhatmaPlanWithStats"
+
+  /khatma/{id}/daily-logs:
+    get:
+      operationId: getKhatmaDailyLogs
+      tags: [khatma]
+      summary: Get daily reading logs for a plan
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Daily logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KhatmaDailyLog"
+
+  /khatma/{id}/pause:
+    post:
+      operationId: pauseKhatma
+      tags: [khatma]
+      summary: Pause an active Khatma plan
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Plan paused
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KhatmaPlan"
+
+  /khatma/{id}/resume:
+    post:
+      operationId: resumeKhatma
+      tags: [khatma]
+      summary: Resume a paused Khatma plan
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Plan resumed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KhatmaPlan"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1631,3 +1954,262 @@ components:
         nusukType:
           type: string
           enum: [ifrad, tamattu, qiran]
+
+    # TASBIH
+    TasbihPreset:
+      type: object
+      required: [id, phraseAr, recommendedCount, category, orderIndex]
+      properties:
+        id:
+          type: string
+          format: uuid
+        phraseAr:
+          type: string
+        transliteration:
+          type: ["string", "null"]
+        translationAr:
+          type: ["string", "null"]
+        meaning:
+          type: ["string", "null"]
+        recommendedCount:
+          type: integer
+        category:
+          type: string
+        timeOfDay:
+          type: ["string", "null"]
+        spiritualNote:
+          type: ["string", "null"]
+        orderIndex:
+          type: integer
+        isFeatured:
+          type: boolean
+
+    TasbihSession:
+      type: object
+      required: [id, presetId, targetCount, currentCount, roundsCompleted, totalCount, status, date]
+      properties:
+        id:
+          type: string
+          format: uuid
+        presetId:
+          type: string
+          format: uuid
+        preset:
+          $ref: "#/components/schemas/TasbihPreset"
+        targetCount:
+          type: integer
+        currentCount:
+          type: integer
+        roundsCompleted:
+          type: integer
+        totalCount:
+          type: integer
+        status:
+          type: string
+          enum: [active, completed, paused]
+        date:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: ["string", "null"]
+          format: date-time
+
+    TasbihDayStats:
+      type: object
+      required: [date, totalCount, roundsCompleted, sessionCount]
+      properties:
+        date:
+          type: string
+        totalCount:
+          type: integer
+        roundsCompleted:
+          type: integer
+        sessionCount:
+          type: integer
+
+    SelectTasbihInput:
+      type: object
+      required: [presetId]
+      properties:
+        presetId:
+          type: string
+          format: uuid
+        targetCount:
+          type: integer
+
+    # QURAN
+    QuranSurah:
+      type: object
+      required: [id, nameAr, nameEn, ayatCount, revelationType, juzStart]
+      properties:
+        id:
+          type: integer
+        nameAr:
+          type: string
+        nameEn:
+          type: string
+        ayatCount:
+          type: integer
+        revelationType:
+          type: string
+        juzStart:
+          type: integer
+
+    QuranJuz:
+      type: object
+      required: [juzNumber, startSurahId, startAyah, endSurahId, endAyah, totalAyat]
+      properties:
+        juzNumber:
+          type: integer
+        startSurahId:
+          type: integer
+        startAyah:
+          type: integer
+        endSurahId:
+          type: integer
+        endAyah:
+          type: integer
+        totalAyat:
+          type: integer
+
+    # KHATMA
+    KhatmaPlan:
+      type: object
+      required: [id, name, status, totalAyat, targetDays, startDate, endDate, currentSurahId, currentAyah, totalAyatRead, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+          enum: [active, completed, paused]
+        totalAyat:
+          type: integer
+        targetDays:
+          type: integer
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        currentSurahId:
+          type: integer
+        currentAyah:
+          type: integer
+        totalAyatRead:
+          type: integer
+        completedAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    KhatmaPlanWithStats:
+      type: object
+      required: [id, name, status, totalAyat, targetDays, startDate, endDate, currentSurahId, currentAyah, totalAyatRead, createdAt, dailyTarget, daysRemaining, progressPercent, statusMessage, currentSurahName, currentJuz]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+          enum: [active, completed, paused]
+        totalAyat:
+          type: integer
+        targetDays:
+          type: integer
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        currentSurahId:
+          type: integer
+        currentAyah:
+          type: integer
+        totalAyatRead:
+          type: integer
+        completedAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        dailyTarget:
+          type: integer
+        daysRemaining:
+          type: integer
+        progressPercent:
+          type: number
+        statusMessage:
+          type: string
+        currentSurahName:
+          type: string
+        currentJuz:
+          type: integer
+        todayAyatRead:
+          type: integer
+        todayTarget:
+          type: integer
+
+    CreateKhatmaInput:
+      type: object
+      required: [targetDays]
+      properties:
+        name:
+          type: string
+        targetDays:
+          type: integer
+          minimum: 1
+          maximum: 365
+
+    LogKhatmaInput:
+      type: object
+      required: [ayatRead, endSurahId, endAyah]
+      properties:
+        ayatRead:
+          type: integer
+          minimum: 1
+        endSurahId:
+          type: integer
+        endAyah:
+          type: integer
+        note:
+          type: ["string", "null"]
+
+    KhatmaDailyLog:
+      type: object
+      required: [id, planId, date, ayatRead, startSurahId, startAyah, endSurahId, endAyah, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        planId:
+          type: string
+          format: uuid
+        date:
+          type: string
+        ayatRead:
+          type: integer
+        startSurahId:
+          type: integer
+        startAyah:
+          type: integer
+        endSurahId:
+          type: integer
+        endAyah:
+          type: integer
+        note:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
