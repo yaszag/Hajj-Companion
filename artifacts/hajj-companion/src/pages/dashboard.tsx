@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGetDashboard } from "@workspace/api-client-react";
+import { getActiveKhatma, getActiveTasbih, getContextualAdhkar } from "@/lib/api-client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -58,16 +59,11 @@ export default function Dashboard() {
   );
 
   useEffect(() => {
-    const token = localStorage.getItem("accessToken");
-    const headers = { Authorization: `Bearer ${token}` };
-
-    fetch("/api/khatma/active", { headers })
-      .then((r) => r.ok ? r.json() : null)
+    getActiveKhatma()
       .then((data) => { if (data) setKhatma(data); })
       .catch(() => {});
 
-    fetch("/api/tasbih/active", { headers })
-      .then((r) => r.ok ? r.json() : null)
+    getActiveTasbih()
       .then((data) => {
         if (data && data.preset) {
           setTasbih({
@@ -81,8 +77,7 @@ export default function Dashboard() {
       })
       .catch(() => {});
 
-    fetch("/api/tasbih/contextual-adhkar", { headers })
-      .then((r) => r.ok ? r.json() : [])
+    getContextualAdhkar()
       .then((data) => setAdhkar(data))
       .catch(() => {});
   }, []);
@@ -224,7 +219,7 @@ export default function Dashboard() {
               <p className="text-xs font-bold text-muted-foreground">أذكار الوقت الحالي</p>
             </div>
             <Link href="/tasbih">
-              <Card className="cursor-pointer hover:border-primary/30 transition-all duration-300 hover-elevate min-h-[7rem] relative overflow-hidden group">
+              <Card className="cursor-pointer hover:border-primary/30 transition-all duration-300 hover-elevate min-h-[18rem] content-center relative overflow-hidden group">
                 {/* Decorative gradient background */}
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 
@@ -234,7 +229,7 @@ export default function Dashboard() {
                 
                 <CardContent className="p-0 w-full h-full relative z-10 flex items-center justify-center">
                   {adhkar.length > 0 ? (
-                    <div className="relative w-full h-full min-h-[7rem] flex items-center justify-center">
+                    <div className="relative w-full h-full min-h-28 flex items-center justify-center">
                       {adhkar.map((dhikr, i) => (
                         <div
                           key={dhikr.id}

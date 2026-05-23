@@ -7,8 +7,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import {
+  getActiveKhatma,
+  getSurahs,
+  createKhatma,
+  logKhatmaReading,
+  cancelKhatma,
+  getKhatmaLogs,
+  undoKhatmaLog,
+  type Surah,
+  type KhatmaLog,
+} from "@/lib/api-client";
+import { ApiError } from "@workspace/api-client-react";
+import {
   BookOpen,
-  ChevronRight,
   Calendar,
   Target,
   CheckCircle2,
@@ -16,6 +27,10 @@ import {
   TrendingUp,
   Plus,
   ArrowLeft,
+  XCircle,
+  History,
+  Undo2,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -40,15 +55,8 @@ interface KhatmaPlanWithStats {
   currentJuz: number;
   todayAyatRead: number;
   todayTarget: number;
-}
-
-interface Surah {
-  id: number;
-  nameAr: string;
-  nameEn: string;
-  ayatCount: number;
-  revelationType: string;
-  juzStart: number;
+  todayJuzRead: number;
+  dailyJuzTarget: number;
 }
 
 /* ═══════════════════════════════════════
@@ -129,28 +137,130 @@ function SetupView({ onCreate }: { onCreate: (name: string, days: number) => voi
 }
 
 /* ═══════════════════════════════════════
+   LOG HISTORY VIEW
+   ═══════════════════════════════════════ */
+function LogHistoryView({
+  logs,
+  surahs,
+  onUndo,
+  onBack,
+}: {
+  logs: KhatmaLog[];
+  surahs: Surah[];
+  onUndo: (logId: string) => void;
+  onBack: () => void;
+}) {
+  const getSurahName = (id: number) => surahs.find((s) => s.id === id)?.nameAr || "";
+
+  return (
+    <div className="p-4 space-y-4">
+      <div className="flex items-center gap-2 mb-4">
+        <Button variant="ghost" size="icon" onClick={onBack}>
+          <ArrowLeft className="w-5 h-5" />
+        </Button>
+        <h3 className="font-bold text-lg flex items-center gap-2">
+          <History className="w-5 h-5" />
+          سجل القراءة
+        </h3>
+      </div>
+
+      {logs.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="p-8 text-center text-muted-foreground">
+            <History className="w-10 h-10 mx-auto mb-3 opacity-50" />
+            <p>لا توجد تسجيلات بعد</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {[...logs].reverse().map((log) => {
+            const startSurah = getSurahName(log.startSurahId);
+            const endSurah = getSurahName(log.endSurahId);
+            const isBackward = log.ayatRead < 0;
+
+            return (
+              <Card key={log.id} className={cn(
+                "hover-elevate",
+                isBackward && "border-amber-200 bg-amber-50/50"
+              )}>
+                <CardContent className="p-3 flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className={cn(
+                        "text-xs font-bold px-2 py-0.5 rounded-full",
+                        isBackward
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-primary/10 text-primary"
+                      )}>
+                        {log.ayatRead > 0 ? `+${log.ayatRead}` : `${log.ayatRead}`} آية
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(log.createdAt).toLocaleDateString("ar-SA", {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {startSurah}:{log.startAyah} ← {endSurah}:{log.endAyah}
+                    </p>
+                    {log.note && (
+                      <p className="text-xs text-muted-foreground mt-0.5 italic">{log.note}</p>
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    onClick={() => onUndo(log.id)}
+                  >
+                    <Undo2 className="w-4 h-4" />
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════
    ACTIVE PLAN TRACKER
    ═══════════════════════════════════════ */
 function TrackerView({
   plan,
   surahs,
   onLog,
+  onCancel,
+  onViewHistory,
 }: {
   plan: KhatmaPlanWithStats;
   surahs: Surah[];
   onLog: (ayatRead: number, endSurahId: number, endAyah: number, note?: string) => void;
+  onCancel: () => void;
+  onViewHistory: () => void;
 }) {
   const [showLogForm, setShowLogForm] = useState(false);
   const [ayatRead, setAyatRead] = useState(10);
   const [endSurahId, setEndSurahId] = useState(plan.currentSurahId);
   const [endAyah, setEndAyah] = useState(plan.currentAyah);
   const [note, setNote] = useState("");
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
+  // Sync form position when plan updates (after logging)
+  useEffect(() => {
+    setEndSurahId(plan.currentSurahId);
+    setEndAyah(plan.currentAyah);
+  }, [plan.currentSurahId, plan.currentAyah]);
 
   const currentSurah = surahs.find((s) => s.id === plan.currentSurahId);
   const statusMsg = plan.statusMessage || "";
   const isBehind = statusMsg.includes("متأخر");
   const isAhead = statusMsg.includes("متقدم");
-  const isOnTrack = !isBehind && !isAhead;
 
   const handleLog = () => {
     onLog(ayatRead, endSurahId, endAyah, note || undefined);
@@ -158,6 +268,54 @@ function TrackerView({
     setAyatRead(10);
     setNote("");
   };
+
+  const handleQuickLog = (count: number) => {
+    const surah = surahs.find((s) => s.id === endSurahId);
+    const maxAyah = surah?.ayatCount || 1;
+    const newAyah = Math.min(plan.currentAyah + count, maxAyah);
+    onLog(count, endSurahId, newAyah);
+  };
+
+  if (showCancelConfirm) {
+    return (
+      <div className="p-4 space-y-4">
+        <div className="flex items-center gap-2 mb-4">
+          <Button variant="ghost" size="icon" onClick={() => setShowCancelConfirm(false)}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <h3 className="font-bold text-lg">إلغاء الختمة</h3>
+        </div>
+
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="p-6 text-center space-y-4">
+            <XCircle className="w-12 h-12 mx-auto text-destructive" />
+            <div>
+              <p className="font-bold text-lg">هل أنت متأكد؟</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                سيتم إلغاء الختمة الحالية وستفقد كل التقدم. يمكنك بدء ختمة جديدة بعد ذلك.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setShowCancelConfirm(false)}
+              >
+                تراجع
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex-1"
+                onClick={onCancel}
+              >
+                نعم، ألغِ الختمة
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (showLogForm) {
     return (
@@ -171,16 +329,6 @@ function TrackerView({
 
         <Card>
           <CardContent className="p-5 space-y-4">
-            <div>
-              <label className="text-sm font-semibold mb-2 block">عدد الآيات المقروءة</label>
-              <Input
-                type="number"
-                min={1}
-                value={ayatRead}
-                onChange={(e) => setAyatRead(parseInt(e.target.value) || 1)}
-              />
-            </div>
-
             <div>
               <label className="text-sm font-semibold mb-2 block">السورة الحالية</label>
               <select
@@ -227,7 +375,7 @@ function TrackerView({
 
   return (
     <div className="p-4 space-y-4">
-      {/* Progress Ring Card */}
+      {/* Progress Card */}
       <Card className="bg-primary text-primary-foreground border-none overflow-hidden relative">
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16 pointer-events-none" />
         <CardContent className="p-6 relative z-10">
@@ -285,7 +433,7 @@ function TrackerView({
               {plan.statusMessage}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              الهدف اليومي: {plan.todayTarget} آية · قرأت اليوم: {plan.todayAyatRead}
+              الهدف اليومي: {plan.dailyJuzTarget} جزء · قرأت اليوم: {plan.todayJuzRead} جزء
             </p>
           </div>
         </CardContent>
@@ -308,11 +456,15 @@ function TrackerView({
         </CardContent>
       </Card>
 
-      {/* Quick Log */}
-      <div className="flex gap-3">
-        <Button className="flex-1 h-12" onClick={() => setShowLogForm(true)}>
+      {/* Action Buttons */}
+      <div className="grid grid-cols-2 gap-3">
+        <Button className="h-12" onClick={() => setShowLogForm(true)}>
           <Plus className="w-5 h-5 ml-2" />
           سجّل قراءة
+        </Button>
+        <Button variant="outline" className="h-12" onClick={onViewHistory}>
+          <History className="w-5 h-5 ml-2" />
+          السجل
         </Button>
       </div>
 
@@ -323,16 +475,22 @@ function TrackerView({
             key={count}
             variant="outline"
             className="h-12"
-            onClick={() => {
-              const surah = surahs.find((s) => s.id === endSurahId);
-              const newAyah = Math.min(plan.currentAyah + count, surah?.ayatCount || 1);
-              onLog(count, endSurahId, newAyah);
-            }}
+            onClick={() => handleQuickLog(count)}
           >
             +{count} آية
           </Button>
         ))}
       </div>
+
+      {/* Cancel Button */}
+      <Button
+        variant="ghost"
+        className="w-full text-muted-foreground hover:text-destructive"
+        onClick={() => setShowCancelConfirm(true)}
+      >
+        <XCircle className="w-4 h-4 ml-2" />
+        إلغاء الختمة
+      </Button>
     </div>
   );
 }
@@ -340,7 +498,7 @@ function TrackerView({
 /* ═══════════════════════════════════════
    COMPLETED VIEW
    ═══════════════════════════════════════ */
-function CompletedView({ plan }: { plan: KhatmaPlanWithStats }) {
+function CompletedView({ plan, onStartNew }: { plan: KhatmaPlanWithStats; onStartNew: () => void }) {
   return (
     <div className="p-4 flex flex-col items-center pt-8">
       <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6 animate-scale-in">
@@ -350,12 +508,16 @@ function CompletedView({ plan }: { plan: KhatmaPlanWithStats }) {
       <p className="text-muted-foreground text-center mb-6">
         أتممت {plan.name} في {plan.targetDays} يوماً
       </p>
-      <Card className="w-full max-w-sm">
+      <Card className="w-full max-w-sm mb-6">
         <CardContent className="p-5 text-center space-y-2">
           <p className="text-4xl font-bold text-primary">{plan.totalAyat.toLocaleString()}</p>
           <p className="text-sm text-muted-foreground">آية مقروءة</p>
         </CardContent>
       </Card>
+      <Button className="w-full max-w-sm h-12" onClick={onStartNew}>
+        <BookOpen className="w-5 h-5 ml-2" />
+        بدء ختمة جديدة
+      </Button>
     </div>
   );
 }
@@ -363,27 +525,47 @@ function CompletedView({ plan }: { plan: KhatmaPlanWithStats }) {
 /* ═══════════════════════════════════════
    MAIN PAGE
    ═══════════════════════════════════════ */
+type PageView = "setup" | "tracker" | "completed" | "history";
+
 export default function KhatmaPage() {
   const { toast } = useToast();
+  const [view, setView] = useState<PageView>("tracker");
   const [plan, setPlan] = useState<KhatmaPlanWithStats | null>(null);
   const [surahs, setSurahs] = useState<Surah[]>([]);
+  const [logs, setLogs] = useState<KhatmaLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchPlan = useCallback(async () => {
     try {
-      const res = await fetch("/api/khatma/active", {
-        headers: { Authorization: `Bearer ${localStorage.getItem("accessToken")}` },
-      });
-      if (res.ok) setPlan(await res.json());
-    } catch { /* ignore */ }
+      const data = await getActiveKhatma();
+      if (data) {
+        setPlan(data);
+        if (data.status === "completed") {
+          setView("completed");
+        } else {
+          setView("tracker");
+        }
+      } else {
+        setPlan(null);
+        setView("setup");
+      }
+    } catch {
+      setPlan(null);
+      setView("setup");
+    }
   }, []);
 
   const fetchSurahs = useCallback(async () => {
     try {
-      const res = await fetch("/api/quran/surahs", {
-        headers: { Authorization: `Bearer ${localStorage.getItem("accessToken")}` },
-      });
-      if (res.ok) setSurahs(await res.json());
+      const data = await getSurahs();
+      if (data) setSurahs(data);
+    } catch { /* ignore */ }
+  }, []);
+
+  const fetchLogs = useCallback(async (planId: string) => {
+    try {
+      const data = await getKhatmaLogs(planId);
+      if (data) setLogs(data);
     } catch { /* ignore */ }
   }, []);
 
@@ -391,47 +573,62 @@ export default function KhatmaPage() {
     Promise.all([fetchPlan(), fetchSurahs()]).finally(() => setIsLoading(false));
   }, [fetchPlan, fetchSurahs]);
 
+  useEffect(() => {
+    if (plan && view === "history") {
+      fetchLogs(plan.id);
+    }
+  }, [plan, view, fetchLogs]);
+
   const handleCreate = async (name: string, days: number) => {
     try {
-      const res = await fetch("/api/khatma", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
-        },
-        body: JSON.stringify({ name, targetDays: days }),
-      });
-      if (res.ok) {
-        setPlan(await res.json());
-        toast({ title: "تم إنشاء الختمة" });
-      } else {
-        const data = await res.json();
-        toast({ title: data.error, variant: "destructive" });
-      }
-    } catch {
-      toast({ title: "حدث خطأ", variant: "destructive" });
+      const data = await createKhatma(name, days);
+      setPlan(data);
+      setView("tracker");
+      toast({ title: "تم إنشاء الختمة" });
+    } catch (err: unknown) {
+      const message = err instanceof ApiError && err.data ? (err.data as Record<string, unknown>).error as string | undefined : undefined;
+      toast({ title: message || "حدث خطأ", variant: "destructive" });
     }
   };
 
   const handleLog = async (ayatRead: number, endSurahId: number, endAyah: number, note?: string) => {
     if (!plan) return;
     try {
-      const res = await fetch(`/api/khatma/${plan.id}/log`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
-        },
-        body: JSON.stringify({ ayatRead, endSurahId, endAyah, note }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setPlan(updated);
-        toast({ title: "تم تسجيل القراءة" });
-      }
+      await logKhatmaReading(plan.id, ayatRead, endSurahId, endAyah, note);
+      await fetchPlan();
+      toast({ title: "تم تسجيل القراءة" });
     } catch {
       toast({ title: "حدث خطأ", variant: "destructive" });
     }
+  };
+
+  const handleCancel = async () => {
+    if (!plan) return;
+    try {
+      await cancelKhatma(plan.id);
+      setPlan(null);
+      setView("setup");
+      toast({ title: "تم إلغاء الختمة" });
+    } catch {
+      toast({ title: "حدث خطأ", variant: "destructive" });
+    }
+  };
+
+  const handleUndoLog = async (logId: string) => {
+    if (!plan) return;
+    try {
+      await undoKhatmaLog(plan.id, logId);
+      await fetchPlan();
+      await fetchLogs(plan.id);
+      toast({ title: "تم التراجع عن التسجيل" });
+    } catch {
+      toast({ title: "حدث خطأ", variant: "destructive" });
+    }
+  };
+
+  const handleStartNew = () => {
+    setPlan(null);
+    setView("setup");
   };
 
   if (isLoading) {
@@ -446,7 +643,7 @@ export default function KhatmaPage() {
     );
   }
 
-  if (!plan) {
+  if (view === "setup" || !plan) {
     return (
       <AppLayout title="ختمة القرآن">
         <SetupView onCreate={handleCreate} />
@@ -454,10 +651,23 @@ export default function KhatmaPage() {
     );
   }
 
-  if (plan.status === "completed") {
+  if (view === "completed") {
     return (
       <AppLayout title="ختمة القرآن">
-        <CompletedView plan={plan} />
+        <CompletedView plan={plan} onStartNew={handleStartNew} />
+      </AppLayout>
+    );
+  }
+
+  if (view === "history") {
+    return (
+      <AppLayout title="ختمة القرآن">
+        <LogHistoryView
+          logs={logs}
+          surahs={surahs}
+          onUndo={handleUndoLog}
+          onBack={() => setView("tracker")}
+        />
       </AppLayout>
     );
   }
@@ -468,6 +678,8 @@ export default function KhatmaPage() {
         plan={plan}
         surahs={surahs}
         onLog={handleLog}
+        onCancel={handleCancel}
+        onViewHistory={() => setView("history")}
       />
     </AppLayout>
   );

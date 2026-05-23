@@ -167,15 +167,20 @@ function getSurahById(id: number) {
   return SURAH_DATA.find((s) => s.id === id);
 }
 
-function getJuzForPosition(surahId: number, ayah: number): number {
-  let cumulativeAyat = 0;
+function getAbsoluteAyahPosition(surahId: number, ayah: number): number {
+  let pos = 0;
   for (const surah of SURAH_DATA) {
     if (surah.id === surahId) {
-      cumulativeAyat += ayah;
+      pos += ayah;
       break;
     }
-    cumulativeAyat += surah.ayatCount;
+    pos += surah.ayatCount;
   }
+  return pos;
+}
+
+function getJuzForPosition(surahId: number, ayah: number): number {
+  const cumulativeAyat = getAbsoluteAyahPosition(surahId, ayah);
 
   let juzCumulative = 0;
   for (const juz of JUZ_DATA) {
@@ -183,6 +188,24 @@ function getJuzForPosition(surahId: number, ayah: number): number {
     if (cumulativeAyat <= juzCumulative) return juz.juzNumber;
   }
   return 30;
+}
+
+// Progress based on Juz completion (out of 30), with fractional progress within current Juz
+function getProgressPercent(surahId: number, ayah: number): number {
+  const currentJuz = getJuzForPosition(surahId, ayah);
+  const juzInfo = JUZ_DATA.find((j) => j.juzNumber === currentJuz);
+  if (!juzInfo) return 0;
+
+  const juzStartPos = getAbsoluteAyahPosition(juzInfo.startSurahId, juzInfo.startAyah);
+  const juzEndPos = getAbsoluteAyahPosition(juzInfo.endSurahId, juzInfo.endAyah);
+  const currentPos = getAbsoluteAyahPosition(surahId, ayah);
+
+  const juzFraction = juzEndPos > juzStartPos
+    ? (currentPos - juzStartPos) / (juzEndPos - juzStartPos)
+    : 0;
+
+  const totalProgress = ((currentJuz - 1 + juzFraction) / 30) * 100;
+  return Math.round(totalProgress * 10) / 10;
 }
 
 async function seedQuranData() {
@@ -251,7 +274,23 @@ router.post("/khatma", requireAuth, async (req, res): Promise<void> => {
     })
     .returning();
 
-  res.status(201).json(plan);
+  res.status(201).json({
+    ...plan,
+    startDate: plan.startDate.toISOString(),
+    endDate: plan.endDate.toISOString(),
+    createdAt: plan.createdAt.toISOString(),
+    completedAt: plan.completedAt?.toISOString() ?? null,
+    dailyTarget: Math.ceil(TOTAL_AYAT / targetDays),
+    daysRemaining: targetDays,
+    progressPercent: 0,
+    statusMessage: "أنت على المسار الصحيح",
+    currentSurahName: "الفاتحة",
+    currentJuz: 1,
+    todayAyatRead: 0,
+    todayTarget: Math.ceil(TOTAL_AYAT / targetDays),
+    todayJuzRead: 0,
+    dailyJuzTarget: Math.round((30 / targetDays) * 10) / 10,
+  });
 });
 
 router.get("/khatma/active", requireAuth, async (req, res): Promise<void> => {
@@ -284,6 +323,8 @@ router.get("/khatma/active", requireAuth, async (req, res): Promise<void> => {
     );
 
   const todayAyatRead = todayLogs.reduce((sum, log) => sum + log.ayatRead, 0);
+  const todayJuzRead = todayAyatRead / (TOTAL_AYAT / 30);
+  const dailyJuzTarget = 30 / plan.targetDays;
 
   const now = new Date();
   const startDate = new Date(plan.startDate);
@@ -293,22 +334,24 @@ router.get("/khatma/active", requireAuth, async (req, res): Promise<void> => {
   const daysRemaining = Math.max(0, totalDays - daysElapsed);
   const dailyTarget = Math.ceil(plan.totalAyat / plan.targetDays);
 
-  const expectedAyat = Math.min(daysElapsed * dailyTarget, plan.totalAyat);
-  const deficit = expectedAyat - plan.totalAyatRead;
+  const expectedJuz = Math.min(daysElapsed * (30 / plan.targetDays), 30);
+  const actualJuz = getJuzForPosition(plan.currentSurahId, plan.currentAyah);
+  const deficitJuz = expectedJuz - actualJuz;
 
   let statusMessage = "";
   if (plan.status === "completed") {
     statusMessage = "ما شاء الله! أتممت الختمة";
-  } else if (deficit > 0) {
-    statusMessage = `أنت متأخر بـ ${deficit} آية`;
-  } else if (deficit < 0) {
-    statusMessage = `ممتاز! أنت متقدم بـ ${Math.abs(deficit)} آية`;
+  } else if (deficitJuz > 0.5) {
+    statusMessage = `أنت متأخر بـ ${deficitJuz.toFixed(1)} جزء`;
+  } else if (deficitJuz < -0.5) {
+    statusMessage = `ممتاز! أنت متقدم بـ ${Math.abs(deficitJuz).toFixed(1)} جزء`;
   } else {
     statusMessage = "أنت على المسار الصحيح";
   }
 
   const currentSurah = getSurahById(plan.currentSurahId);
   const currentJuz = getJuzForPosition(plan.currentSurahId, plan.currentAyah);
+  const absolutePos = getAbsoluteAyahPosition(plan.currentSurahId, plan.currentAyah);
 
   res.json({
     ...plan,
@@ -318,12 +361,14 @@ router.get("/khatma/active", requireAuth, async (req, res): Promise<void> => {
     completedAt: plan.completedAt?.toISOString() ?? null,
     dailyTarget,
     daysRemaining,
-    progressPercent: Math.round((plan.totalAyatRead / plan.totalAyat) * 1000) / 10,
+    progressPercent: getProgressPercent(plan.currentSurahId, plan.currentAyah),
     statusMessage,
     currentSurahName: currentSurah?.nameAr ?? "",
     currentJuz,
     todayAyatRead,
     todayTarget: dailyTarget,
+    todayJuzRead: Math.round(todayJuzRead * 10) / 10,
+    dailyJuzTarget: Math.round(dailyJuzTarget * 10) / 10,
   });
 });
 
@@ -378,6 +423,13 @@ router.post("/khatma/:id/log", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  // Set totalAyatRead to absolute position — not accumulated
+  const newAbsolutePos = getAbsoluteAyahPosition(endSurahId, endAyah);
+  const oldAbsolutePos = getAbsoluteAyahPosition(plan.currentSurahId, plan.currentAyah);
+  const actualAyatRead = newAbsolutePos - oldAbsolutePos;
+  const newTotalRead = Math.max(0, Math.min(newAbsolutePos, TOTAL_AYAT));
+  const isCompleted = newTotalRead >= TOTAL_AYAT;
+
   const today = new Date().toISOString().slice(0, 10);
 
   const [log] = await db
@@ -385,7 +437,7 @@ router.post("/khatma/:id/log", requireAuth, async (req, res): Promise<void> => {
     .values({
       planId: plan.id,
       date: today,
-      ayatRead,
+      ayatRead: actualAyatRead,
       startSurahId: plan.currentSurahId,
       startAyah: plan.currentAyah,
       endSurahId,
@@ -394,13 +446,10 @@ router.post("/khatma/:id/log", requireAuth, async (req, res): Promise<void> => {
     })
     .returning();
 
-  const newTotalRead = plan.totalAyatRead + ayatRead;
-  const isCompleted = newTotalRead >= TOTAL_AYAT;
-
   const [updatedPlan] = await db
     .update(khatmaPlansTable)
     .set({
-      totalAyatRead: Math.min(newTotalRead, TOTAL_AYAT),
+      totalAyatRead: newTotalRead,
       currentSurahId: endSurahId,
       currentAyah: endAyah,
       status: isCompleted ? "completed" : "active",
@@ -420,6 +469,8 @@ router.post("/khatma/:id/log", requireAuth, async (req, res): Promise<void> => {
     );
 
   const todayAyatRead = todayLogs.reduce((sum, l) => sum + l.ayatRead, 0);
+  const todayJuzRead = todayAyatRead / (TOTAL_AYAT / 30);
+  const dailyJuzTarget = 30 / updatedPlan.targetDays;
 
   const now = new Date();
   const startDate = new Date(updatedPlan.startDate);
@@ -429,22 +480,23 @@ router.post("/khatma/:id/log", requireAuth, async (req, res): Promise<void> => {
   const daysRemaining = Math.max(0, totalDays - daysElapsed);
   const dailyTarget = Math.ceil(updatedPlan.totalAyat / updatedPlan.targetDays);
 
-  const expectedAyat = Math.min(daysElapsed * dailyTarget, updatedPlan.totalAyat);
-  const deficit = expectedAyat - updatedPlan.totalAyatRead;
+  const expectedJuz = Math.min(daysElapsed * (30 / updatedPlan.targetDays), 30);
+  const currentJuz = getJuzForPosition(updatedPlan.currentSurahId, updatedPlan.currentAyah);
+  const deficitJuz = expectedJuz - currentJuz;
 
   let statusMessage = "";
   if (isCompleted) {
     statusMessage = "ما شاء الله! أتممت الختمة";
-  } else if (deficit > 0) {
-    statusMessage = `أنت متأخر بـ ${deficit} آية`;
-  } else if (deficit < 0) {
-    statusMessage = `ممتاز! أنت متقدم بـ ${Math.abs(deficit)} آية`;
+  } else if (deficitJuz > 0.5) {
+    statusMessage = `أنت متأخر بـ ${deficitJuz.toFixed(1)} جزء`;
+  } else if (deficitJuz < -0.5) {
+    statusMessage = `ممتاز! أنت متقدم بـ ${Math.abs(deficitJuz).toFixed(1)} جزء`;
   } else {
     statusMessage = "أنت على المسار الصحيح";
   }
 
   const currentSurah = getSurahById(updatedPlan.currentSurahId);
-  const currentJuz = getJuzForPosition(updatedPlan.currentSurahId, updatedPlan.currentAyah);
+  const absolutePos = getAbsoluteAyahPosition(updatedPlan.currentSurahId, updatedPlan.currentAyah);
 
   res.status(201).json({
     ...updatedPlan,
@@ -454,12 +506,14 @@ router.post("/khatma/:id/log", requireAuth, async (req, res): Promise<void> => {
     completedAt: updatedPlan.completedAt?.toISOString() ?? null,
     dailyTarget,
     daysRemaining,
-    progressPercent: Math.round((updatedPlan.totalAyatRead / updatedPlan.totalAyat) * 1000) / 10,
+    progressPercent: getProgressPercent(updatedPlan.currentSurahId, updatedPlan.currentAyah),
     statusMessage,
     currentSurahName: currentSurah?.nameAr ?? "",
     currentJuz,
     todayAyatRead,
     todayTarget: dailyTarget,
+    todayJuzRead: Math.round(todayJuzRead * 10) / 10,
+    dailyJuzTarget: Math.round(dailyJuzTarget * 10) / 10,
   });
 });
 
@@ -531,6 +585,90 @@ router.post("/khatma/:id/resume", requireAuth, async (req, res): Promise<void> =
     .returning();
 
   res.json({ ...updated, startDate: updated.startDate.toISOString(), endDate: updated.endDate.toISOString(), createdAt: updated.createdAt.toISOString(), completedAt: updated.completedAt?.toISOString() ?? null });
+});
+
+router.post("/khatma/:id/cancel", requireAuth, async (req, res): Promise<void> => {
+  const result = await db
+    .delete(khatmaPlansTable)
+    .where(
+      and(
+        eq(khatmaPlansTable.id, req.params.id),
+        eq(khatmaPlansTable.userId, req.userId!),
+        eq(khatmaPlansTable.status, "active")
+      )
+    );
+
+  if (result.rowCount === 0) {
+    res.status(404).json({ error: "الختمة غير موجودة" });
+    return;
+  }
+
+  res.json({ success: true });
+});
+
+router.delete("/khatma/:planId/logs/:logId", requireAuth, async (req, res): Promise<void> => {
+  const [log] = await db
+    .select()
+    .from(khatmaDailyLogsTable)
+    .where(
+      and(
+        eq(khatmaDailyLogsTable.id, req.params.logId),
+        eq(khatmaDailyLogsTable.planId, req.params.planId)
+      )
+    )
+    .limit(1);
+
+  if (!log) {
+    res.status(404).json({ error: "السجل غير موجود" });
+    return;
+  }
+
+  const [plan] = await db
+    .select()
+    .from(khatmaPlansTable)
+    .where(
+      and(
+        eq(khatmaPlansTable.id, req.params.planId),
+        eq(khatmaPlansTable.userId, req.userId!),
+        eq(khatmaPlansTable.status, "active")
+      )
+    )
+    .limit(1);
+
+  if (!plan) {
+    res.status(404).json({ error: "الختمة غير موجودة" });
+    return;
+  }
+
+  // Revert: set position back to what it was before this log
+  const newTotalRead = Math.max(0, plan.totalAyatRead - log.ayatRead);
+
+  await db
+    .update(khatmaPlansTable)
+    .set({
+      totalAyatRead: newTotalRead,
+      currentSurahId: log.startSurahId,
+      currentAyah: log.startAyah,
+      status: "active",
+      completedAt: null,
+    })
+    .where(eq(khatmaPlansTable.id, plan.id));
+
+  await db
+    .delete(khatmaDailyLogsTable)
+    .where(eq(khatmaDailyLogsTable.id, log.id));
+
+  res.json({ success: true });
+});
+
+router.get("/khatma/:id/logs", requireAuth, async (req, res): Promise<void> => {
+  const logs = await db
+    .select()
+    .from(khatmaDailyLogsTable)
+    .where(eq(khatmaDailyLogsTable.planId, req.params.id))
+    .orderBy(khatmaDailyLogsTable.createdAt);
+
+  res.json(logs);
 });
 
 export default router;

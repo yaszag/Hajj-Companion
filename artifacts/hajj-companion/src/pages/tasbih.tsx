@@ -15,6 +15,7 @@ import {
   Sunrise,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { getTasbihPresets, getActiveTasbih, selectTasbih, incrementTasbih, resetTasbihRound } from "@/lib/api-client";
 
 interface TasbihPreset {
   id: string;
@@ -264,20 +265,15 @@ export default function TasbihPage() {
 
   const fetchPresets = useCallback(async () => {
     try {
-      const res = await fetch("/api/tasbih/presets", {
-        headers: { Authorization: `Bearer ${localStorage.getItem("accessToken")}` },
-      });
-      if (res.ok) setPresets(await res.json());
+      const data = await getTasbihPresets();
+      if (data) setPresets(data);
     } catch { /* ignore */ }
   }, []);
 
   const fetchActive = useCallback(async () => {
     try {
-      const res = await fetch("/api/tasbih/active", {
-        headers: { Authorization: `Bearer ${localStorage.getItem("accessToken")}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
+      const data = await getActiveTasbih();
+      if (data) {
         setSession(data);
         setView("counter");
       }
@@ -291,19 +287,9 @@ export default function TasbihPage() {
   const handleSelect = async (preset: TasbihPreset) => {
     setIsCounterLoading(true);
     try {
-      const res = await fetch("/api/tasbih/select", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
-        },
-        body: JSON.stringify({ presetId: preset.id }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSession(data);
-        setView("counter");
-      }
+      const data = await selectTasbih(preset.id);
+      setSession(data);
+      setView("counter");
     } catch {
       toast({ title: "حدث خطأ", variant: "destructive" });
     } finally {
@@ -313,22 +299,16 @@ export default function TasbihPage() {
 
   const handleIncrement = async () => {
     try {
-      const res = await fetch("/api/tasbih/increment", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${localStorage.getItem("accessToken")}` },
-      });
-      if (res.ok) setSession(await res.json());
+      const data = await incrementTasbih();
+      if (data) setSession(data);
     } catch { /* ignore */ }
   };
 
   const handleResetRound = async () => {
     try {
-      const res = await fetch("/api/tasbih/reset-round", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${localStorage.getItem("accessToken")}` },
-      });
-      if (res.ok) {
-        setSession(await res.json());
+      const data = await resetTasbihRound();
+      if (data) {
+        setSession(data);
         toast({ title: "ما شاء الله! تم إكمال الجولة" });
       }
     } catch { /* ignore */ }
