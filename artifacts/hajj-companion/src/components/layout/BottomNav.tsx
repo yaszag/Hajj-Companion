@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "wouter";
-import { Home, List, MapPin, Users, BookOpen } from "lucide-react";
+import { Home, List, MapPin, Users, BookOpen, Sun } from "lucide-react";
 
 export function BottomNav() {
   const [location] = useLocation();
@@ -9,6 +9,7 @@ export function BottomNav() {
     { href: "/", label: "الرئيسية", icon: Home },
     { href: "/duas", label: "أدعية", icon: BookOpen },
     { href: "/manasik", label: "مناسكي", icon: List },
+    { href: "/arafah", label: "عرفة", icon: Sun },
     { href: "/places", label: "مواقعي", icon: MapPin },
     { href: "/group", label: "مجموعتي", icon: Users },
   ];

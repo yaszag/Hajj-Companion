@@ -11,6 +11,7 @@ import dashboardRouter from "./dashboard";
 import duasRouter from "./duas";
 import tasbihRouter from "./tasbih";
 import khatmaRouter from "./khatma";
+import arafahRouter from "./arafah";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(dashboardRouter);
 router.use(duasRouter);
 router.use(tasbihRouter);
 router.use(khatmaRouter);
+router.use(arafahRouter);
 
 export default router;

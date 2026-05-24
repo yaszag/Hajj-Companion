@@ -9,3 +9,4 @@ export * from "./emergency";
 export * from "./duas";
 export * from "./tasbih";
 export * from "./khatma";
+export * from "./arafah";

@@ -112,6 +112,19 @@ export default function Dashboard() {
           </p>
         </section>
 
+        {/* Arafah Plan Entry */}
+        <Link href="/arafah">
+          <Card className="border-amber-400/30 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 cursor-pointer hover:shadow-md transition-all active:scale-[0.99]">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="text-3xl">🤲</div>
+              <div className="flex-1 text-right">
+                <p className="font-bold text-sm">خطة يوم عرفة</p>
+                <p className="text-xs text-muted-foreground mt-0.5">أهداف مخصصة · أذكار · أدعية</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
         {/* Emergency Quick Action */}
         <Link href="/emergency">
           <Button variant="destructive" size="lg" className="w-full font-bold h-14 text-lg shadow-md hover-elevate">

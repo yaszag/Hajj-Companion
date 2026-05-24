@@ -132,3 +132,126 @@ export const incrementTasbih = () => customFetch<TasbihSession>("/api/tasbih/inc
 export const resetTasbihRound = () => customFetch<TasbihSession>("/api/tasbih/reset-round", { method: "POST" });
 
 export const getContextualAdhkar = () => customFetch<AdhkarItem[]>("/api/tasbih/contextual-adhkar", { method: "GET" });
+
+// ═══════════════════════════════════════
+// Arafah Plan API
+// ═══════════════════════════════════════
+
+export interface ArafahPlan {
+  id: string;
+  userId: string;
+  year: number;
+  status: string;
+  startedAt: string;
+  completedAt: string | null;
+  totalDhikrCount: number;
+  totalDuasRead: number;
+  goalsCompleted: number;
+  reflection: string | null;
+}
+
+export interface ArafahTimeBlock {
+  id: string;
+  planId: string;
+  labelAr: string;
+  labelEn: string | null;
+  startTime: string;
+  endTime: string;
+  orderIndex: number;
+  moodColor: string | null;
+}
+
+export interface ArafahGoal {
+  id: string;
+  planId: string;
+  blockId: string | null;
+  goalType: string;
+  targetType: string;
+  targetValue: number;
+  refType: string | null;
+  refId: string | null;
+  titleAr: string | null;
+  arabicText: string | null;
+  orderIndex: number;
+  completed: boolean;
+  completedAt: string | null;
+  currentCount: number;
+}
+
+export interface ArafahDuaProgress {
+  id: string;
+  planId: string;
+  duaId: string;
+  status: string;
+  lastPosition: number | null;
+  readCount: number;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+export interface ArafahPlanData {
+  plan: ArafahPlan;
+  blocks: ArafahTimeBlock[];
+  goals: ArafahGoal[];
+  duaProgress: ArafahDuaProgress[];
+}
+
+export interface ArafahSessionState {
+  userId: string;
+  planId: string;
+  activeScreen: string | null;
+  activeGoalId: string | null;
+  activeTasbeehPresetId: string | null;
+  activeDuaId: string | null;
+  activeDuaPosition: number | null;
+  lastActiveAt: string;
+}
+
+export const getArafahPlan = () => customFetch<ArafahPlanData>("/api/arafah/plan", { method: "GET" });
+
+export const incrementArafahGoal = (goalId: string) =>
+  customFetch<ArafahGoal>(`/api/arafah/goals/${goalId}/increment`, { method: "POST" });
+
+export const completeArafahGoal = (goalId: string) =>
+  customFetch<ArafahGoal>(`/api/arafah/goals/${goalId}/complete`, { method: "POST" });
+
+export const updateArafahDuaProgress = (duaId: string, data: { planId: string; status?: string; lastPosition?: number }) =>
+  customFetch<ArafahDuaProgress>(`/api/arafah/dua/${duaId}/progress`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+export const getArafahSession = () => customFetch<ArafahSessionState | null>("/api/arafah/session", { method: "GET" });
+
+export const saveArafahSession = (data: Partial<ArafahSessionState>) =>
+  customFetch<ArafahSessionState>("/api/arafah/session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+export const getArafahGoal = (goalId: string) =>
+  customFetch<ArafahGoal>(`/api/arafah/goals/${goalId}`, { method: "GET" });
+
+export const revertArafahGoal = (goalId: string) =>
+  customFetch<ArafahGoal>(`/api/arafah/goals/${goalId}/revert`, { method: "POST" });
+
+export const deleteArafahGoal = (goalId: string) =>
+  customFetch<{ success: boolean }>(`/api/arafah/goals/${goalId}`, { method: "DELETE" });
+
+export const createArafahGoal = (data: {
+  planId: string;
+  blockId?: string;
+  goalType: string;
+  targetValue: number;
+  titleAr: string;
+  arabicText?: string;
+  refType?: string;
+  refId?: string;
+}) =>
+  customFetch<ArafahGoal>("/api/arafah/goals", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });

@@ -22,6 +22,8 @@ import DuasDetailPage from "@/pages/duas-detail";
 import NusukSelectPage from "@/pages/nusuk-select";
 import TasbihPage from "@/pages/tasbih";
 import KhatmaPage from "@/pages/khatma";
+import ArafahGoalsPage from "@/pages/arafah-goals";
+import ArafahCounterPage from "@/pages/arafah-counter";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -45,6 +47,8 @@ function AppRouter() {
       <Route path="/nusuk-select" component={NusukSelectPage} />
       <Route path="/tasbih" component={TasbihPage} />
       <Route path="/khatma" component={KhatmaPage} />
+      <Route path="/arafah" component={ArafahGoalsPage} />
+      <Route path="/arafah/goal/:goalId/counter" component={ArafahCounterPage} />
       <Route component={NotFound} />
     </Switch>
   );
