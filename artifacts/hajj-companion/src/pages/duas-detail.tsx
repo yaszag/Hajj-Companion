@@ -88,17 +88,19 @@ export default function DuaDetailPage() {
           {/* Arabic Text — Main Card */}
           <Card className="bg-muted/30 border-2 border-primary/10">
             <CardContent className="p-6">
-              <p
-                className="text-foreground leading-loose text-right"
+              <div
+                className="text-foreground text-right space-y-3"
                 style={{
-                  fontFamily: "Cairo, serif",
+                  fontFamily: "'Noto Naskh Arabic', serif",
                   fontSize: `${fontSize}px`,
                   direction: "rtl",
-                  lineHeight: "2",
+                  lineHeight: "2.2",
                 }}
               >
-                {d.arabicText}
-              </p>
+                {d.arabicText.split(/(?<=\.)\s*/).filter(Boolean).map((sentence, i) => (
+                  <p key={i}>{sentence}</p>
+                ))}
+              </div>
             </CardContent>
           </Card>
 

@@ -66,12 +66,14 @@ function DuaCard({ dua, onPress }: { dua: DuaListItem; onPress: () => void }) {
           <ChevronLeft className="w-4 h-4 text-muted-foreground mt-1 shrink-0 rotate-180" />
           <div className="flex-1 text-right">
             <p className="font-bold text-sm text-foreground mb-2">{dua.titleAr}</p>
-            <p
-              className="text-base leading-relaxed text-foreground/80 line-clamp-2"
-              style={{ fontFamily: "Cairo, serif", direction: "rtl" }}
+            <div
+              className="text-base leading-relaxed text-foreground/80 line-clamp-2 space-y-1"
+              style={{ fontFamily: "'Noto Naskh Arabic', serif", direction: "rtl" }}
             >
-              {dua.arabicText}
-            </p>
+              {dua.arabicText.split(/(?<=\.)\s*/).filter(Boolean).map((sentence, i) => (
+                <p key={i}>{sentence}</p>
+              ))}
+            </div>
             {dua.source && (
               <p className="text-xs text-muted-foreground mt-2 text-right">{dua.source}</p>
             )}

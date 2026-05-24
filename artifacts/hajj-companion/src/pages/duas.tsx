@@ -81,9 +81,11 @@ function FeaturedCard({ dua, onPress }: { dua: DuaListItem; onPress: () => void 
       className="min-w-[260px] rounded-2xl bg-primary text-primary-foreground p-4 text-right shrink-0 hover:bg-primary/90 active:scale-[0.98] transition-all shadow-md"
     >
       <p className="font-bold text-sm mb-2 line-clamp-1">{dua.titleAr}</p>
-      <p className="text-xs opacity-80 line-clamp-3 leading-relaxed" style={{ fontFamily: "Cairo, serif" }}>
-        {dua.arabicText}
-      </p>
+      <div className="text-xs opacity-80 line-clamp-3 leading-relaxed space-y-0.5" style={{ fontFamily: "'Noto Naskh Arabic', serif" }}>
+        {dua.arabicText.split(/(?<=\.)\s*/).filter(Boolean).map((sentence, i) => (
+          <p key={i}>{sentence}</p>
+        ))}
+      </div>
     </button>
   );
 }
